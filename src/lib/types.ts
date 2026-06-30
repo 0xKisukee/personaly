@@ -94,16 +94,46 @@ export interface Liability {
   note?: string;
 }
 
+/* ------------------------------- FLUX ----------------------------- */
+
+export type IncomeCategory = "salaire" | "rente" | "aide" | "autre";
+export type ExpenseCategory = "vie_courante" | "logement" | "impot" | "loisir" | "autre";
+
+/**
+ * Flux saisi manuellement (mensuel ou annuel).
+ * Les revenus complémentaires sont saisis NETS AVANT IMPÔT : l'impôt se gère,
+ * s'il y a lieu, comme une dépense distincte (catégorie "impot").
+ */
+export interface IncomeItem {
+  id: string;
+  label: string;
+  category: IncomeCategory;
+  amount: number;
+  period: Period;
+}
+
+export interface ExpenseItem {
+  id: string;
+  label: string;
+  category: ExpenseCategory;
+  amount: number;
+  period: Period;
+}
+
 /* ------------------------------ STATE ----------------------------- */
 
 export interface AppState {
   profile: Profile;
   assets: Asset[];
   liabilities: Liability[];
+  incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
+  expenses: ExpenseItem[]; // dépenses & impôts
 }
 
 export const EMPTY_STATE: AppState = {
   profile: { firstName: "", birthDate: "" },
   assets: [],
   liabilities: [],
+  incomes: [],
+  expenses: [],
 };

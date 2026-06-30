@@ -4,6 +4,7 @@ import { StoreProvider } from "./lib/store";
 import Sidebar, { type RouteId } from "./components/Sidebar";
 import ProfilPage from "./pages/ProfilPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
+import FluxPage from "./pages/FluxPage";
 import SoonPage from "./pages/SoonPage";
 
 function Router() {
@@ -23,14 +24,7 @@ function Router() {
           >
             {route === "profil" && <ProfilPage />}
             {route === "patrimoine" && <PatrimoinePage />}
-            {route === "flux" && (
-              <SoonPage
-                eyebrow="03 — Flux"
-                glyph="≈"
-                title="Flux entrants & sortants"
-                desc="Bientôt : le récapitulatif de ton enrichissement annuel — revenus du patrimoine et revenus complémentaires (nets avant impôt) d'un côté, dépenses, mensualités d'emprunt et impôts de l'autre."
-              />
-            )}
+            {route === "flux" && <FluxPage />}
             {route === "projection" && (
               <SoonPage
                 eyebrow="04 — Projection"

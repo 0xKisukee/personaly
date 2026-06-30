@@ -86,3 +86,49 @@ export const IconClose = ({ size }: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
+export const IconBriefcase = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18" />
+  </svg>
+);
+export const IconGift = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7S10.5 3 8.5 3 6 5 6 5s1.5 2 6 2zM12 7s1.5-4 3.5-4S18 5 18 5s-1.5 2-6 2z" />
+  </svg>
+);
+export const IconCoins = ({ size }: P) => (
+  <svg {...base(size)}>
+    <ellipse cx="9" cy="7" rx="6" ry="3" />
+    <path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7" />
+    <path d="M15 11.5c2.6.3 6 1.5 6 3.5 0 1.7-2.7 3-6 3-1.3 0-2.5-.2-3.5-.6" />
+  </svg>
+);
+export const IconReceipt = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3z" />
+    <path d="M8 8h8M8 12h8" />
+  </svg>
+);
+export const IconCart = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M3 4h2l2.4 12.4a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L21 8H6" />
+    <circle cx="9" cy="20" r="1" />
+    <circle cx="18" cy="20" r="1" />
+  </svg>
+);
+export const IconSparkle = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+  </svg>
+);
+export const IconArrowUp = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </svg>
+);
+export const IconArrowDown = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 5v14M6 13l6 6 6-6" />
+  </svg>
+);

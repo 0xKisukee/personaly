@@ -19,6 +19,37 @@ export function monthlyPayment(
   return (capital * r) / (1 - Math.pow(1 + r, -months));
 }
 
+/**
+ * Décompose les paiements des 12 prochains mois en part d'INTÉRÊTS et part de
+ * CAPITAL, par simulation du tableau d'amortissement (le solde baisse chaque mois).
+ *   - intérêts = vrai coût (réduit le patrimoine)
+ *   - capital  = remboursement (neutre pour le patrimoine net : la dette baisse d'autant)
+ * Sans taux, tout le paiement est du capital. Sans durée, on suppose 12 mois.
+ */
+export function loanYearSplit(
+  capital: number,
+  annualRatePct: number,
+  payment: number,
+  termMonths?: number
+): { interest: number; principal: number } {
+  let balance = capital || 0;
+  const r = (annualRatePct || 0) / 100 / 12;
+  const months = termMonths && termMonths > 0 ? Math.min(12, termMonths) : 12;
+  let interest = 0;
+  let principal = 0;
+  for (let m = 0; m < months; m++) {
+    if (balance <= 0 || !payment) break;
+    const i = balance * r;
+    let p = payment - i;
+    if (p < 0) p = 0; // paiement insuffisant pour amortir (cas limite)
+    if (p > balance) p = balance; // dernière échéance
+    interest += i;
+    principal += p;
+    balance -= p;
+  }
+  return { interest, principal };
+}
+
 /** Date de fin estimée d'un prêt : aujourd'hui + `months`. */
 export function termEndDate(months: number, from = new Date()): Date {
   const d = new Date(from);
