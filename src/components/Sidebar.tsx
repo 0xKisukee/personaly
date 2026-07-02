@@ -8,7 +8,7 @@ export const ROUTES: { id: RouteId; label: string; soon?: boolean }[] = [
   { id: "profil", label: "Profil" },
   { id: "patrimoine", label: "Patrimoine" },
   { id: "flux", label: "Flux" },
-  { id: "projection", label: "Projection", soon: true },
+  { id: "projection", label: "Projection" },
 ];
 
 export default function Sidebar({

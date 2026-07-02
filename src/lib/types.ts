@@ -65,6 +65,12 @@ export interface Asset {
   incomeRate?: number; // % de la valeur versé/an, si incomeMode === "rate"
   income?: MoneyFlow; // montant fixe distribué, si incomeMode === "amount"
 
+  // 3. charges récurrentes de l'actif (taxe foncière, copro, assurance PNO…) — flux sortant
+  charges?: MoneyFlow;
+
+  // plancher de valeur : la dépréciation ne descend pas en dessous (ex. valeur résiduelle voiture)
+  valueFloor?: number;
+
   note?: string;
 }
 
@@ -91,6 +97,7 @@ export interface Liability {
   termMonths?: number; // durée restante en mois -> date de fin du prêt
   monthlyPayment?: number; // mensualité (calculée auto, ou saisie si autoPayment=false)
   autoPayment?: boolean; // true = mensualité calculée depuis outstanding + rate + termMonths
+  insurance?: number; // assurance emprunteur mensuelle, EN PLUS de la mensualité (coût réel)
   note?: string;
 }
 
@@ -104,12 +111,20 @@ export type ExpenseCategory = "vie_courante" | "logement" | "impot" | "loisir" |
  * Les revenus complémentaires sont saisis NETS AVANT IMPÔT : l'impôt se gère,
  * s'il y a lieu, comme une dépense distincte (catégorie "impot").
  */
+/**
+ * `startYear` / `endYear` (année calendaire, optionnels) bornent la période
+ * d'activité du flux. Vides = actif dès aujourd'hui et sans fin.
+ * Ex. salaire qui s'arrête à la retraite (endYear), pension qui démarre (startYear).
+ */
 export interface IncomeItem {
   id: string;
   label: string;
   category: IncomeCategory;
   amount: number;
   period: Period;
+  startYear?: number;
+  endYear?: number;
+  growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
 
 export interface ExpenseItem {
@@ -118,7 +133,33 @@ export interface ExpenseItem {
   category: ExpenseCategory;
   amount: number;
   period: Period;
+  startYear?: number;
+  endYear?: number;
+  growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
+
+/* --------------------------- PROJECTION --------------------------- */
+
+/** Hypothèses de la page Projection (persistées). */
+export interface ProjectionParams {
+  horizon: number; // nombre d'années projetées
+  savingsYield: number; // %/an : rendement de l'épargne réinvestie (0 = dort)
+  inflation: number; // %/an
+  indexExpenses: boolean; // les dépenses suivent l'inflation (défaut si pas de taux propre)
+  indexIncomes: boolean; // les revenus complémentaires suivent l'inflation (idem)
+  realTerms: boolean; // affichage en euros constants (pouvoir d'achat)
+  goalAmount?: number; // objectif de patrimoine net
+  goalYear?: number; // année cible de l'objectif
+}
+
+export const DEFAULT_PROJECTION: ProjectionParams = {
+  horizon: 30,
+  savingsYield: 0,
+  inflation: 2,
+  indexExpenses: true,
+  indexIncomes: true,
+  realTerms: false,
+};
 
 /* ------------------------------ STATE ----------------------------- */
 
@@ -128,6 +169,7 @@ export interface AppState {
   liabilities: Liability[];
   incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
   expenses: ExpenseItem[]; // dépenses & impôts
+  projection: ProjectionParams;
 }
 
 export const EMPTY_STATE: AppState = {
@@ -136,4 +178,5 @@ export const EMPTY_STATE: AppState = {
   liabilities: [],
   incomes: [],
   expenses: [],
+  projection: DEFAULT_PROJECTION,
 };

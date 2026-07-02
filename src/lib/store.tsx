@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { EMPTY_STATE, type AppState } from "./types";
+import { DEFAULT_PROJECTION, EMPTY_STATE, type AppState } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -16,7 +16,11 @@ function load(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY_STATE;
     const parsed = JSON.parse(raw);
-    return { ...EMPTY_STATE, ...parsed };
+    return {
+      ...EMPTY_STATE,
+      ...parsed,
+      projection: { ...DEFAULT_PROJECTION, ...(parsed.projection ?? {}) },
+    };
   } catch {
     return EMPTY_STATE;
   }

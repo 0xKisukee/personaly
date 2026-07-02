@@ -376,6 +376,19 @@ function AssetModal({
               Le gain reste dans l'actif et <b>se compose</b> dans la projection. Négatif pour un bien qui se déprécie.
             </span>
           </div>
+          {draft.growthRate < 0 && (
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Valeur plancher (€) — optionnel</label>
+              <input
+                className="input mono"
+                type="number"
+                placeholder="ex. valeur résiduelle d'une voiture"
+                value={draft.valueFloor ?? ""}
+                onChange={(e) => set({ valueFloor: e.target.value ? Number(e.target.value) : undefined })}
+              />
+              <span className="help">La dépréciation ne descendra pas sous ce plancher dans la projection.</span>
+            </div>
+          )}
         </div>
 
         {/* --- Bloc 2 : revenu distribué --- */}
@@ -432,6 +445,35 @@ function AssetModal({
           )}
           <span className="help" style={{ marginTop: 10 }}>
             Le gain est <b>perçu en cash</b> (loyer, dividende) : il alimente les flux et reste <b>à plat</b>, sans se composer.
+          </span>
+        </div>
+
+        {/* --- Bloc 3 : charges récurrentes --- */}
+        <div className="span-2 form-block">
+          <div className="block-title">
+            <span className="dot drain" /> Charges récurrentes · <span className="block-tag">flux sortant</span>
+          </div>
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>Montant des charges (€)</label>
+              <input
+                className="input mono"
+                type="number"
+                placeholder="taxe foncière, copro, assurance…"
+                value={draft.charges?.amount || ""}
+                onChange={(e) => set({ charges: { amount: Number(e.target.value), period: draft.charges?.period ?? "yearly" } })}
+              />
+            </div>
+            <div className="field">
+              <label>Périodicité</label>
+              <PeriodSegment
+                value={draft.charges?.period ?? "yearly"}
+                onChange={(period) => set({ charges: { amount: draft.charges?.amount ?? 0, period } })}
+              />
+            </div>
+          </div>
+          <span className="help" style={{ marginTop: 10 }}>
+            Coûts de détention (taxe foncière, charges de copro, assurance PNO…). Déduits des flux, ils permettent le rendement net.
           </span>
         </div>
       </div>
@@ -573,6 +615,18 @@ function LiabilityModal({
                 )}
                 {draft.termMonths ? <> Fin estimée du prêt : <b>{formatEndDate(draft.termMonths)}</b> ({formatDuration(draft.termMonths)}).</> : null}
               </span>
+            </div>
+
+            <div className="field span-2">
+              <label>Assurance emprunteur (€/mois) — optionnel</label>
+              <input
+                className="input mono"
+                type="number"
+                placeholder="en plus de la mensualité"
+                value={draft.insurance || ""}
+                onChange={(e) => set({ insurance: Number(e.target.value) })}
+              />
+              <span className="help">Coût réel qui s'ajoute à la mensualité (ne rembourse pas de capital).</span>
             </div>
           </>
         )}

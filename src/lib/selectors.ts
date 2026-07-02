@@ -1,6 +1,8 @@
 import type { AppState, Asset } from "./types";
-import { toYearly } from "./format";
+import { toYearly, isActiveYear } from "./format";
 import { loanYearSplit } from "./finance";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 /** Revenu annuel distribué par un actif (flux entrant ; la croissance capitalisée n'en fait pas partie). */
 export function assetYearlyIncome(a: Asset): number {
@@ -35,9 +37,12 @@ export function patrimoineIncomeYearly(s: AppState): number {
   return s.assets.reduce((sum, a) => sum + assetYearlyIncome(a), 0);
 }
 
-/** Revenus complémentaires saisis — encaissés, liquides (annuel). */
+/** Revenus complémentaires ACTIFS cette année — encaissés, liquides (annuel). */
 export function extraIncomeYearly(s: AppState): number {
-  return s.incomes.reduce((sum, i) => sum + toYearly(i), 0);
+  return s.incomes.reduce(
+    (sum, i) => sum + (isActiveYear(i.startYear, i.endYear, CURRENT_YEAR) ? toYearly(i) : 0),
+    0
+  );
 }
 
 /** Croissance capitalisée nette du patrimoine (annuel) : appréciations − dépréciations. */
@@ -90,9 +95,22 @@ export function loanPaymentsYearly(s: AppState): number {
 
 /* ---- SORTANTS ---- */
 
-/** Dépenses & impôts saisis — liquides (annuel). */
+/** Dépenses & impôts ACTIFS cette année — liquides (annuel). */
 export function expensesYearly(s: AppState): number {
-  return s.expenses.reduce((sum, e) => sum + toYearly(e), 0);
+  return s.expenses.reduce(
+    (sum, e) => sum + (isActiveYear(e.startYear, e.endYear, CURRENT_YEAR) ? toYearly(e) : 0),
+    0
+  );
+}
+
+/** Charges récurrentes des actifs (taxe foncière, copro…) — sortant réel (annuel). */
+export function assetChargesYearly(s: AppState): number {
+  return s.assets.reduce((sum, a) => sum + toYearly(a.charges), 0);
+}
+
+/** Assurance emprunteur (annuel) — coût réel en plus des mensualités. */
+export function loanInsuranceYearly(s: AppState): number {
+  return s.liabilities.reduce((sum, l) => sum + ((l.monthlyPayment || 0) > 0 ? (l.insurance || 0) * 12 : 0), 0);
 }
 
 /* ---- AGRÉGATS ---- */
@@ -104,10 +122,13 @@ export function inflowsYearly(s: AppState): number {
 
 /**
  * Total des flux sortants comptés dans l'enrichissement :
- * dépenses + intérêts + moins-values latentes (PAS le capital remboursé).
+ * dépenses + charges + intérêts + assurance + moins-values latentes
+ * (PAS le capital remboursé).
  */
 export function outflowsYearly(s: AppState): number {
-  return expensesYearly(s) + loanInterestYearly(s) - latentLossYearly(s);
+  return (
+    expensesYearly(s) + assetChargesYearly(s) + loanInterestYearly(s) + loanInsuranceYearly(s) - latentLossYearly(s)
+  );
 }
 
 /** Enrichissement du patrimoine net annuel = entrants − sortants. */
@@ -122,7 +143,7 @@ export function enrichmentYearly(s: AppState): number {
  * (sortie de cash compensée par la baisse de la dette).
  */
 export function realizedEnrichmentYearly(s: AppState): number {
-  return cashInflowsYearly(s) - expensesYearly(s) - loanInterestYearly(s);
+  return cashInflowsYearly(s) - expensesYearly(s) - assetChargesYearly(s) - loanInterestYearly(s) - loanInsuranceYearly(s);
 }
 
 /** Plus-value latente = croissance capitalisée non encaissée (alias lisible). */

@@ -5,7 +5,7 @@ import Sidebar, { type RouteId } from "./components/Sidebar";
 import ProfilPage from "./pages/ProfilPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
 import FluxPage from "./pages/FluxPage";
-import SoonPage from "./pages/SoonPage";
+import ProjectionPage from "./pages/ProjectionPage";
 
 function Router() {
   const [route, setRoute] = useState<RouteId>("patrimoine");
@@ -25,14 +25,7 @@ function Router() {
             {route === "profil" && <ProfilPage />}
             {route === "patrimoine" && <PatrimoinePage />}
             {route === "flux" && <FluxPage />}
-            {route === "projection" && (
-              <SoonPage
-                eyebrow="04 — Projection"
-                glyph="↗"
-                title="Projection patrimoniale"
-                desc="Bientôt : projette ta situation sur plusieurs années à partir de tes actifs, de leur rendement et de l'évolution de leur valeur."
-              />
-            )}
+            {route === "projection" && <ProjectionPage />}
           </motion.div>
         </AnimatePresence>
       </main>

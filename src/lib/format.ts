@@ -60,6 +60,17 @@ export function ageFrom(birthIso: string): number | null {
   return age;
 }
 
+/** Un flux borné par startYear/endYear est-il actif l'année `year` ? */
+export function isActiveYear(
+  startYear: number | undefined,
+  endYear: number | undefined,
+  year: number
+): boolean {
+  if (startYear && year < startYear) return false;
+  if (endYear && year > endYear) return false;
+  return true;
+}
+
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }

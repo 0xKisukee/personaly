@@ -9,11 +9,13 @@ import type {
   Period,
 } from "../lib/types";
 import {
+  assetChargesYearly,
   assetYearlyGrowth,
   assetYearlyIncome,
   enrichmentYearly,
   expensesYearly,
   extraIncomeYearly,
+  loanInsuranceYearly,
   inflowsYearly,
   latentGainYearly,
   latentGrowthYearly,
@@ -25,7 +27,9 @@ import {
   realizedEnrichmentYearly,
 } from "../lib/selectors";
 import { loanYearSplit } from "../lib/finance";
-import { money, signedMoney, toYearly, uid } from "../lib/format";
+import { money, signedMoney, toYearly, uid, isActiveYear } from "../lib/format";
+
+const CURRENT_YEAR = new Date().getFullYear();
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import {
@@ -81,6 +85,13 @@ const Liq = ({ kind }: { kind: "encaisse" | "latent" }) => (
   <span className={"liq liq-" + kind}>{kind === "encaisse" ? "encaissé" : "latent"}</span>
 );
 
+function Bounds({ s, e }: { s?: number; e?: number }) {
+  if (!s && !e) return null;
+  const active = isActiveYear(s, e, CURRENT_YEAR);
+  const txt = [s ? `dès ${s}` : "", e ? `→ ${e}` : ""].filter(Boolean).join(" ");
+  return <span className="tag" style={{ color: active ? "var(--ink-mute)" : "var(--drain)" }}>{active ? txt : `${txt} · inactif`}</span>;
+}
+
 export default function FluxPage() {
   const { state, update } = useStore();
   const [view, setView] = useState<Period>("yearly");
@@ -108,6 +119,9 @@ export default function FluxPage() {
   const loanRows = state.liabilities
     .filter((l) => (l.monthlyPayment || 0) > 0)
     .map((l) => ({ l, split: loanYearSplit(l.outstanding, l.rate ?? 0, l.monthlyPayment ?? 0, l.termMonths) }));
+  const chargeRows = state.assets
+    .map((a) => ({ asset: a, yearly: toYearly(a.charges) }))
+    .filter((x) => x.yearly > 0);
 
   /* CRUD */
   const saveIncome = (it: IncomeItem) => {
@@ -255,12 +269,13 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.incomes.map((it, i) => {
               const Meta = INCOME_META[it.category];
+              const active = isActiveYear(it.startYear, it.endYear, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic" style={{ color: "var(--gain)" }}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds s={it.startYear} e={it.endYear} /></div>
                   </div>
                   <div className="row-val" style={{ color: "var(--gain)" }}>{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -327,12 +342,13 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.expenses.map((it, i) => {
               const Meta = EXPENSE_META[it.category];
+              const active = isActiveYear(it.startYear, it.endYear, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic" style={{ color: it.category === "impot" ? "var(--brass)" : "var(--drain)" }}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds s={it.startYear} e={it.endYear} /></div>
                   </div>
                   <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -345,32 +361,60 @@ export default function FluxPage() {
           </div>
         )}
 
-        {/* intérêts d'emprunt (auto, liquide ; capital = neutre) */}
-        <div className="flux-sub">
-          <span className="flux-sub-label">Intérêts d'emprunt</span>
+        {/* charges d'actifs (auto, liquide) */}
+        <div className="flux-sub" style={{ marginTop: 18 }}>
+          <span className="flux-sub-label">Charges d'actifs</span>
           <Liq kind="encaisse" />
-          <span className="flux-sub-total mono">−{money(disp(loanInterestYearly(state)))} {per}</span>
+          <span className="flux-sub-total mono">−{money(disp(assetChargesYearly(state)))} {per}</span>
+        </div>
+        {chargeRows.length === 0 ? (
+          <p className="help" style={{ marginBottom: 18 }}>Taxe foncière, charges de copropriété… Renseigne-les sur un actif dans <b>Patrimoine</b>.</p>
+        ) : (
+          <div className="rows" style={{ marginBottom: 18 }}>
+            {chargeRows.map(({ asset, yearly }) => (
+              <div className="row" key={asset.id}>
+                <div className="row-ic" style={{ color: "var(--drain)" }}><IconHome size={20} /></div>
+                <div className="row-main">
+                  <div className="row-title">{asset.label}</div>
+                  <div className="row-meta"><span className="tag">depuis Patrimoine</span><span>charges de détention</span></div>
+                </div>
+                <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(yearly))}<div className="flux zero">{per}</div></div>
+                <div />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* intérêts & assurance d'emprunt (auto, liquide ; capital = neutre) */}
+        <div className="flux-sub">
+          <span className="flux-sub-label">Intérêts & assurance d'emprunt</span>
+          <Liq kind="encaisse" />
+          <span className="flux-sub-total mono">−{money(disp(loanInterestYearly(state) + loanInsuranceYearly(state)))} {per}</span>
         </div>
         {loanRows.length === 0 ? (
           <p className="help">Aucun emprunt. Les intérêts des prêts saisis dans <b>Patrimoine</b> apparaîtront ici.</p>
         ) : (
           <>
             <div className="rows">
-              {loanRows.map(({ l, split }) => (
-                <div className="row" key={l.id}>
-                  <div className="row-ic" style={{ color: "var(--drain)" }}><IconDebt size={20} /></div>
-                  <div className="row-main">
-                    <div className="row-title">{l.label}</div>
-                    <div className="row-meta">
-                      <span className="tag">depuis Patrimoine</span>
-                      <span>mensualité {money(l.monthlyPayment || 0)}/mois</span>
-                      · <span style={{ color: "var(--sage)" }}>dont capital {money(disp(split.principal))} {per} reconstitué</span>
+              {loanRows.map(({ l, split }) => {
+                const insY = (l.insurance || 0) * 12;
+                return (
+                  <div className="row" key={l.id}>
+                    <div className="row-ic" style={{ color: "var(--drain)" }}><IconDebt size={20} /></div>
+                    <div className="row-main">
+                      <div className="row-title">{l.label}</div>
+                      <div className="row-meta">
+                        <span className="tag">depuis Patrimoine</span>
+                        <span>mensualité {money(l.monthlyPayment || 0)}/mois</span>
+                        · <span style={{ color: "var(--sage)" }}>dont capital {money(disp(split.principal))} {per} reconstitué</span>
+                        {insY > 0 && <>· <span>assurance {money(disp(insY))} {per}</span></>}
+                      </div>
                     </div>
+                    <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(split.interest + insY))}<div className="flux zero">intérêts{insY > 0 ? " + assur." : ""} {per}</div></div>
+                    <div />
                   </div>
-                  <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(split.interest))}<div className="flux zero">intérêts {per}</div></div>
-                  <div />
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="help" style={{ marginTop: 12 }}>
               Le <b>capital remboursé</b> ({money(disp(loanPrincipalYearly(state)))} {per}) sort de ta trésorerie mais revient dans ton
@@ -438,6 +482,9 @@ interface FlowDraft {
   category: string;
   amount: number;
   period: Period;
+  startYear?: number;
+  endYear?: number;
+  growth?: number;
 }
 
 function FlowModal({
@@ -508,7 +555,42 @@ function FlowModal({
             <button data-on={draft.period === "yearly"} onClick={() => set({ period: "yearly" })}>Annuel</button>
           </div>
         </div>
+        <div className="field">
+          <label>À partir de (année)</label>
+          <input
+            className="input mono"
+            type="number"
+            placeholder={`${CURRENT_YEAR} (dès maintenant)`}
+            value={draft.startYear ?? ""}
+            onChange={(e) => set({ startYear: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </div>
+        <div className="field">
+          <label>Jusqu'à (année)</label>
+          <input
+            className="input mono"
+            type="number"
+            placeholder="sans fin"
+            value={draft.endYear ?? ""}
+            onChange={(e) => set({ endYear: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </div>
+        <div className="field span-2">
+          <label>Revalorisation (%/an) — optionnel</label>
+          <input
+            className="input mono"
+            type="number"
+            step="0.1"
+            placeholder="vide = suit l'inflation de la projection"
+            value={draft.growth ?? ""}
+            onChange={(e) => set({ growth: e.target.value !== "" ? Number(e.target.value) : undefined })}
+          />
+        </div>
       </div>
+      <p className="help" style={{ marginTop: 14 }}>
+        Dates : laisse vide pour un flux permanent (salaire qui s'arrête, pension qui démarre, dépense temporaire).
+        Revalorisation : taux propre au flux dans la projection (ex. salaire +2 %/an) ; vide = suit l'inflation globale.
+      </p>
 
       <div className="modal-foot">
         <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
