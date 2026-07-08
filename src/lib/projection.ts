@@ -4,8 +4,9 @@
    Gère : intérêts composés des actifs (+ plancher de valeur), revenus distribués,
    charges d'actifs, revenus/dépenses manuels (bornés + revalorisés par flux),
    emprunts amortis (+ assurance) qui s'éteignent à terme, réinvestissement de
-   l'épargne, inflation / euros constants, et ÉVÉNEMENTS datés (achat/vente d'actif,
-   nouvel emprunt, rentrée/sortie ponctuelle).
+   l'épargne, inflation / euros constants.
+   (Les ÉVÉNEMENTS datés — achat/vente, nouvel emprunt — ont été retirés ;
+   à re-concevoir, cf. README.)
 
    Chaque point d'année porte le patrimoine au DÉBUT de l'année et les FLUX qui se
    produisent PENDANT cette année-là (composition disponible via `detail`).
