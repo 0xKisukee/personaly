@@ -71,7 +71,21 @@ export interface Asset {
   // plancher de valeur : la dépréciation ne descend pas en dessous (ex. valeur résiduelle voiture)
   valueFloor?: number;
 
+  // 4. versements — l'actif peut recevoir le SURPLUS d'épargne de la projection
+  //    (comptes, livrets, placements uniquement — pas un bien immobilier ni un véhicule).
+  //    Le plafond porte sur les DÉPÔTS cumulés (ex. 150 000 € pour un PEA), pas sur la
+  //    valeur : la croissance peut faire dépasser le plafond, seuls les versements s'arrêtent.
+  depositCap?: number; // plafond de versements cumulés
+  depositsMade?: number; // versements déjà effectués avant aujourd'hui (plafond restant = cap − made)
+
   note?: string;
+}
+
+/** Catégories d'actifs pouvant recevoir des versements (surplus d'épargne). */
+export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["compte_courant", "livret_epargne", "placement"];
+
+export function canReceiveDeposits(a: Pick<Asset, "category">): boolean {
+  return DEPOSIT_ELIGIBLE.includes(a.category);
 }
 
 export type LiabilityCategory =
@@ -148,8 +162,11 @@ export interface ProjectionParams {
   indexExpenses: boolean; // les dépenses suivent l'inflation (défaut si pas de taux propre)
   indexIncomes: boolean; // les revenus complémentaires suivent l'inflation (idem)
   realTerms: boolean; // affichage en euros constants (pouvoir d'achat)
-  goalAmount?: number; // objectif de patrimoine net
-  goalYear?: number; // année cible de l'objectif
+  // Cascade d'affectation du surplus mensuel : le 1er actif reçoit jusqu'à son
+  // plafond de versements, l'excédent passe au suivant, et ce qui reste va à
+  // l'épargne (taux savingsYield). Vide/absent = tout à l'épargne.
+  surplusTargets?: string[];
+  fiTarget?: number; // patrimoine net à atteindre pour l'indépendance financière (défini par l'utilisateur, pas déduit par le moteur)
 }
 
 export const DEFAULT_PROJECTION: ProjectionParams = {

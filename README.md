@@ -109,6 +109,12 @@ C'est **la** distinction centrale du modèle :
 
 Un même actif peut cumuler les deux (appartement loué : +2 %/an de valeur ET un loyer).
 
+**Versements (projection)** : les actifs « liquides » (`compte_courant`, `livret_epargne`,
+`placement` — voir `canReceiveDeposits()`) peuvent recevoir le **surplus d'épargne** de la
+projection. `depositCap` = plafond de **dépôts cumulés** (ex. 150 000 € pour un PEA),
+`depositsMade` = versements déjà effectués. Le plafond porte sur les dépôts, pas sur la
+valeur : la croissance peut le dépasser, seuls les versements s'arrêtent.
+
 ### Liability (passif) — emprunt amortissable
 
 `outstanding` (capital restant dû) réduit le patrimoine net. Pour un emprunt :
@@ -176,14 +182,22 @@ Simulation **mois par mois** sur un horizon réglable (10/20/30/40 ans) — mote
   (`termMonths`) ou quand le capital est remboursé → la mensualité libérée gonfle l'épargne.
 - Le cash net réalisé s'accumule en **épargne cumulée**, **réinvestie** au taux
   `savingsYield` (composée).
+- **Affectation du surplus en cascade** (`surplusTargets: string[]`, ordonné) : le
+  surplus mensuel est versé dans le 1er actif éligible (PEA, livret…) jusqu'à son
+  **plafond de versements**, l'excédent passe au 2e, etc. — chaque dépôt se compose
+  ensuite au `growthRate` de l'actif. Ce qui reste après la cascade, et les
+  **déficits**, sont portés par l'épargne. (Migration : l'ancien `surplusTargetId`
+  est converti en cascade à 1 élément au chargement, cf. `store.tsx`.)
 - **Hypothèses** paramétrables (persistées dans `state.projection`) : rendement de
   l'épargne, **inflation**, indexation des revenus/dépenses, affichage en
   **euros constants** (réel) ou courants (nominal).
-- **Indépendance financière** : marque l'année où les revenus passifs encaissés
-  (distribués + rendement épargne) couvrent les sorties (dépenses + charges + emprunts).
+- **Indépendance financière** : seuil de patrimoine net **défini par l'utilisateur**
+  (`fiTarget`), PAS déduit par le moteur — l'utilisateur sait mieux que nous ce qu'il
+  garderait ou vendrait (voiture, maison…) pour en vivre. Le moteur marque la première
+  année où le patrimoine net projeté atteint le seuil (évalué après conversion en
+  euros constants si activée : le seuil s'entend en pouvoir d'achat d'aujourd'hui).
 - **Flux à durée limitée + indexation par flux** : chaque revenu/dépense peut avoir un
   `startYear`/`endYear` et un taux de revalorisation `growth` propre.
-- **Objectif** : cible de patrimoine net à une année → bannière d'écart + suivi.
 - **Détail d'une année** : clic sur une ligne de la table → modale de composition
   (patrimoine début d'année + décomposition des flux). Le moteur émet un
   `detail` par `YearPoint`.
@@ -204,6 +218,12 @@ Simulation **mois par mois** sur un horizon réglable (10/20/30/40 ans) — mote
 - ✅ **Mensualité d'emprunt calculée** depuis capital + taux + durée.
 - ✅ **Capital remboursé exclu** des flux sortants (neutre pour le patrimoine).
 - ✅ **Saisie mensuelle OU annuelle** au choix, conversion automatique.
+- ✅ **Indépendance financière = seuil saisi par l'utilisateur** (`fiTarget`), pas une
+  heuristique de revenus passifs (essayée puis abandonnée : impossible de deviner quels
+  actifs l'utilisateur vendrait/garderait).
+- ❌ **Objectif daté retiré** (« X € en année Y » + bannière d'écart) : jugé peu utile,
+  redondant avec le seuil d'indépendance qui répond à la meilleure question (« quand
+  est-ce que j'atteins X ? »).
 
 ---
 
@@ -214,15 +234,19 @@ Réinvestissement de l'épargne (rendement composé), inflation + indexation + e
 constants, indépendance financière, flux à durée limitée (start/end), graphe
 composition (actifs/épargne/dettes), **indexation par flux** (`growth` propre à
 chaque revenu/dépense), **charges par actif**, **assurance emprunteur**, **plancher
-de valeur**, **objectif patrimonial** (cible + écart), **détail d'une année**
-(clic sur une ligne → composition patrimoine + flux), 1re année partielle (mois restants).
+de valeur**, **patrimoine d'indépendance** (seuil `fiTarget` saisi par l'utilisateur →
+année d'atteinte), **détail d'une année**
+(clic sur une ligne → composition patrimoine + flux), 1re année partielle (mois restants),
+**affectation du surplus en cascade d'actifs** (PEA → livret → … au lieu de l'épargne,
+avec **plafond de versements** par actif — `depositCap`).
 
 ### PROJECTION — pistes restantes
 - **Scénarios comparés** (pessimiste / médian / optimiste) côte à côte — volontairement
   non implémenté pour l'instant.
 - **Événements ponctuels** (achat/vente d'actif, nouvel emprunt daté, prime/héritage) :
   retirés car buggés, à re-concevoir proprement plus tard.
-- Horizon personnalisé au-delà des presets ; taux d'épargne requis pour un objectif.
+- Horizon personnalisé au-delà des presets ; taux d'épargne requis pour atteindre le
+  patrimoine d'indépendance.
 
 ### Pistes plus lointaines
 - Fiscalité optionnelle plus fine (toujours sans moteur lourd : taux effectifs par
@@ -230,7 +254,6 @@ de valeur**, **objectif patrimonial** (cible + écart), **détail d'une année**
 - Retour éventuel des **sociétés** (SAS/SCI, quote-part des résultats).
 - Export / import des données (sauvegarde JSON), puisque tout est local.
 - Plusieurs scénarios de projection comparés.
-- Objectifs patrimoniaux et alertes (ex. atteindre X € à Y ans).
 
 ---
 

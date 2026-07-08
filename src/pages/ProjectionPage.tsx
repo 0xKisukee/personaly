@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useStore } from "../lib/store";
 import type { ProjectionParams } from "../lib/types";
+import { canReceiveDeposits } from "../lib/types";
 import { project, type ProjectionEvent, type YearDetail, type YearPoint } from "../lib/projection";
 import { grossWealth, totalLiabilities } from "../lib/selectors";
 import { money, signedMoney, percent } from "../lib/format";
@@ -34,8 +35,15 @@ export default function ProjectionPage() {
   const cagr = now.netWorth > 0 && end.netWorth > 0 ? (Math.pow(end.netWorth / now.netWorth, 1 / p.horizon) - 1) * 100 : null;
   const fiPoint = fiYearIndex !== null ? points[fiYearIndex] : null;
 
-  const goalPoint = p.goalYear ? points.find((pt) => pt.year === p.goalYear) ?? null : null;
-  const goalGap = p.goalAmount != null && goalPoint ? goalPoint.netWorth - p.goalAmount : null;
+  // cascade d'affectation du surplus : cibles valides, dans l'ordre, sans doublon
+  const eligibleAssets = state.assets.filter(canReceiveDeposits);
+  const targets = (p.surplusTargets ?? [])
+    .map((id) => eligibleAssets.find((a) => a.id === id))
+    .filter((a, i, arr) => a && arr.indexOf(a) === i) as typeof eligibleAssets;
+  const targetIds = targets.map((a) => a.id);
+  const availableTargets = eligibleAssets.filter((a) => !targetIds.includes(a.id));
+  const setTargets = (ids: string[]) => setP({ surplusTargets: ids.length ? ids : undefined });
+
   const selPoint = selYear !== null ? points.find((pt) => pt.year === selYear) ?? null : null;
 
   return (
@@ -84,13 +92,11 @@ export default function ProjectionPage() {
               </div>
             </div>
             <div className="field assum-num">
-              <label>Objectif de patrimoine net</label>
+              <label>Patrimoine d'indépendance</label>
               <div className="assum-input">
                 <input className="input mono" type="number" placeholder="montant" style={{ width: 130 }}
-                  value={p.goalAmount ?? ""} onChange={(e) => setP({ goalAmount: e.target.value ? Number(e.target.value) : undefined })} />
-                <span className="assum-unit">en</span>
-                <input className="input mono" type="number" placeholder="année" style={{ width: 84 }}
-                  value={p.goalYear ?? ""} onChange={(e) => setP({ goalYear: e.target.value ? Number(e.target.value) : undefined })} />
+                  value={p.fiTarget ?? ""} onChange={(e) => setP({ fiTarget: e.target.value ? Number(e.target.value) : undefined })} />
+                <span className="assum-unit">€</span>
               </div>
             </div>
             <div className="assum-toggles">
@@ -106,6 +112,55 @@ export default function ProjectionPage() {
                 <input type="checkbox" checked={p.realTerms} onChange={(e) => setP({ realTerms: e.target.checked })} />
                 Euros constants
               </label>
+            </div>
+
+            {/* cascade d'affectation du surplus : actif 1 → actif 2 → … → épargne */}
+            <div className="field assum-surplus">
+              <label>Affectation du surplus</label>
+              <div className="assum-cascade">
+                {targets.map((a, i) => {
+                  const capLeft = a.depositCap != null ? Math.max(0, a.depositCap - (a.depositsMade || 0)) : null;
+                  const options = eligibleAssets.filter((x) => x.id === a.id || !targetIds.includes(x.id));
+                  return (
+                    <Fragment key={a.id}>
+                      {i > 0 && <span className="assum-unit">→</span>}
+                      <span className="cascade-item">
+                        <select
+                          className="select"
+                          value={a.id}
+                          onChange={(e) => setTargets(targetIds.map((id, k) => (k === i ? e.target.value : id)))}
+                        >
+                          {options.map((x) => (
+                            <option key={x.id} value={x.id}>{x.label || "Actif"} · {percent(x.growthRate)}/an</option>
+                          ))}
+                        </select>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setTargets(targetIds.filter((_, k) => k !== i))}
+                          aria-label="Retirer de la cascade"
+                        >×</button>
+                        {capLeft != null && <span className="help">reste {money(capLeft)} à verser</span>}
+                      </span>
+                    </Fragment>
+                  );
+                })}
+                {availableTargets.length > 0 && (
+                  <>
+                    {targets.length > 0 && <span className="assum-unit">→</span>}
+                    <select
+                      className="select cascade-add"
+                      value=""
+                      onChange={(e) => e.target.value && setTargets([...targetIds, e.target.value])}
+                    >
+                      <option value="">{targets.length ? "+ Ajouter…" : "Épargne (défaut)"}</option>
+                      {availableTargets.map((x) => (
+                        <option key={x.id} value={x.id}>{x.label || "Actif"} · {percent(x.growthRate)}/an</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                {targets.length > 0 && <span className="assum-unit">→ Épargne</span>}
+              </div>
             </div>
           </motion.div>
 
@@ -131,20 +186,19 @@ export default function ProjectionPage() {
             </div>
           </motion.div>
 
-          {/* --------- indépendance financière --------- */}
-          {fiPoint && (
+          {/* --------- indépendance financière (seuil défini par l'utilisateur) --------- */}
+          {fiPoint && p.fiTarget != null && (
             <div className="fi-banner">
               <span className="fi-dot" />
               <b>Indépendance financière</b> atteinte en <b>{fiPoint.year}</b>
-              {fiPoint.age !== null ? ` (${fiPoint.age} ans)` : ""} — tes revenus passifs couvrent alors tes sorties.
+              {fiPoint.age !== null ? ` (${fiPoint.age} ans)` : ""} — ton patrimoine net dépasse alors {money(p.fiTarget)}.
             </div>
           )}
-
-          {goalGap !== null && goalPoint && (
-            <div className="fi-banner" style={{ borderColor: goalGap >= 0 ? "rgba(147,195,156,0.35)" : "rgba(213,152,115,0.4)", background: goalGap >= 0 ? "rgba(147,195,156,0.07)" : "rgba(213,152,115,0.07)" }}>
-              <span className="fi-dot" style={{ background: goalGap >= 0 ? "var(--gain)" : "var(--drain)", boxShadow: `0 0 10px ${goalGap >= 0 ? "var(--gain)" : "var(--drain)"}` }} />
-              Objectif <b>{money(p.goalAmount!)}</b> en <b>{p.goalYear}</b> — projeté {money(goalPoint.netWorth)},&nbsp;
-              <b style={{ color: goalGap >= 0 ? "var(--gain)" : "var(--drain)" }}>{goalGap >= 0 ? "atteint" : "manque"} {money(Math.abs(goalGap))}</b>.
+          {!fiPoint && p.fiTarget != null && p.fiTarget > 0 && (
+            <div className="fi-banner" style={{ borderColor: "rgba(213,152,115,0.4)", background: "rgba(213,152,115,0.07)" }}>
+              <span className="fi-dot" style={{ background: "var(--drain)", boxShadow: "0 0 10px var(--drain)" }} />
+              <b>Indépendance financière</b> ({money(p.fiTarget)}) non atteinte sur l'horizon —
+              il manque <b>{money(Math.max(0, p.fiTarget - end.netWorth))}</b> en {end.year}.
             </div>
           )}
 
@@ -216,7 +270,10 @@ export default function ProjectionPage() {
 
           <p className="help" style={{ marginTop: 18 }}>
             Hypothèses : taux d'évolution et revenus supposés constants{p.realTerms ? ", montants en euros constants" : ", montants en euros courants"}.
-            L'épargne réalisée est réinvestie à {percent(p.savingsYield)}/an. Estimation, hors fiscalité.
+            {targets.length > 0
+              ? <> Le surplus mensuel est versé en cascade dans <b>{targets.map((t) => t.label || "actif").join(" → ")}</b> (plafonds de versements respectés), le reste en épargne ; les déficits restent portés par l'épargne.</>
+              : <> L'épargne réalisée est réinvestie à {percent(p.savingsYield)}/an.</>}
+            {" "}Estimation, hors fiscalité.
           </p>
         </>
       )}
@@ -354,11 +411,13 @@ function NetWorthChart({ points, events, mode }: { points: YearPoint[]; events: 
 function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boolean; onClose: () => void }) {
   const d: YearDetail = point.detail;
   const suffix = real ? " · € constants" : "";
+  const enrichment = point.distributed + point.extra + point.savingsYield + point.growth
+    - point.expenses - point.charges - point.interest - point.insurance;
   return (
     <Modal open title={`Composition ${point.year}`} subtitle={`Patrimoine net ${money(point.netWorth)}${point.age !== null ? ` · ${point.age} ans` : ""}${suffix}`} onClose={onClose}>
       <div className="yd-grid">
         <div>
-          <div className="yd-head"><span className="dot brass" /> Patrimoine (fin d'année)</div>
+          <div className="yd-head"><span className="dot brass" /> Patrimoine (début d'année)</div>
           {d.assets.map((a) => (
             <div className="yd-row" key={a.id}>
               <span className="yd-label">{a.label}</span>
@@ -383,22 +442,34 @@ function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boo
 
         <div>
           <div className="yd-head"><span className="dot gain" /> Flux de l'année</div>
-          <YdFlow label="Revenus distribués" v={point.distributed} pos />
-          {d.incomes.map((f) => <YdFlow key={f.id} label={f.label} v={f.amount} pos sub />)}
+          {point.distributed > 0 && <YdFlow label="Revenus distribués" v={point.distributed} pos />}
+          {d.assets.filter((a) => a.income > 0).map((a) => <YdFlow key={a.id} label={a.label} v={a.income} pos sub />)}
           {point.extra > 0 && <YdFlow label="Revenus complémentaires" v={point.extra} pos />}
+          {d.incomes.map((f) => <YdFlow key={f.id} label={f.label} v={f.amount} pos sub />)}
           {point.savingsYield !== 0 && <YdFlow label="Rendement épargne" v={point.savingsYield} pos />}
           {point.growth !== 0 && <YdFlow label="Plus-value latente" v={point.growth} pos={point.growth >= 0} />}
           {point.expenses > 0 && <YdFlow label="Dépenses & impôts" v={-point.expenses} />}
+          {d.expenses.map((f) => <YdFlow key={f.id} label={f.label} v={-f.amount} sub />)}
           {point.charges > 0 && <YdFlow label="Charges d'actifs" v={-point.charges} />}
           {point.interest > 0 && <YdFlow label="Intérêts d'emprunt" v={-point.interest} />}
           {point.insurance > 0 && <YdFlow label="Assurance emprunt" v={-point.insurance} />}
           {point.principal > 0 && <YdFlow label="Capital remboursé (neutre)" v={-point.principal} neutral />}
+          {point.deposited > 0 && <YdFlow label="Surplus investi (transfert neutre)" v={point.deposited} neutral />}
+          {point.deposited > 0 && d.assets.filter((a) => a.deposit > 0).map((a) => (
+            <YdFlow key={a.id} label={a.label} v={a.deposit} neutral sub />
+          ))}
           <div className="yd-row yd-total">
             <span>Enrichissement</span>
-            <span className="mono" style={{ color: "var(--brass-bright)" }}>
-              {signedMoney(point.distributed + point.extra + point.savingsYield + point.growth - point.expenses - point.charges - point.interest - point.insurance)}
-            </span>
+            <span className="mono" style={{ color: "var(--brass-bright)" }}>{signedMoney(enrichment)}</span>
           </div>
+          {/* pont entre les deux colonnes : début d'année + enrichissement = début d'année suivante
+              (masqué en euros constants : le déflateur diffère d'une année à l'autre) */}
+          {!real && (
+            <div className="yd-row" style={{ opacity: 0.8 }}>
+              <span className="yd-label">→ Patrimoine net début {point.year + 1}</span>
+              <span className="mono" style={{ color: "var(--ink-soft)" }}>{money(point.netWorth + enrichment)}</span>
+            </div>
+          )}
         </div>
       </div>
     </Modal>

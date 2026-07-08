@@ -4,7 +4,10 @@
    Gère : intérêts composés des actifs (+ plancher de valeur), revenus distribués,
    charges d'actifs, revenus/dépenses manuels (bornés + revalorisés par flux),
    emprunts amortis (+ assurance) qui s'éteignent à terme, réinvestissement de
-   l'épargne, inflation / euros constants.
+   l'épargne OU affectation du surplus en CASCADE d'actifs éligibles (chaque actif
+   reçoit jusqu'à son plafond de versements, l'excédent passe au suivant, le reste
+   retombe dans l'épargne ; les déficits restent portés par l'épargne),
+   inflation / euros constants.
    (Les ÉVÉNEMENTS datés — achat/vente, nouvel emprunt — ont été retirés ;
    à re-concevoir, cf. README.)
 
@@ -15,9 +18,10 @@
    =========================================================================== */
 
 import type { Asset, AppState, ProjectionParams } from "./types";
+import { canReceiveDeposits } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 
-export interface AssetDetail { id: string; label: string; value: number; growth: number; income: number; charges: number; }
+export interface AssetDetail { id: string; label: string; value: number; growth: number; income: number; charges: number; deposit: number; }
 export interface LoanDetail { id: string; label: string; balance: number; interest: number; principal: number; insurance: number; }
 export interface FlowDetail { id: string; label: string; amount: number; }
 
@@ -45,6 +49,7 @@ export interface YearPoint {
   insurance: number;
   growth: number;
   savingsYield: number;
+  deposited: number; // surplus versé dans l'actif cible (transfert, neutre pour le patrimoine)
   detail: YearDetail;
 }
 
@@ -68,7 +73,7 @@ interface SimAsset { id: string; label: string; a: Asset; val: number; active: b
 interface SimLoan { id: string; label: string; balance: number; mRate: number; payment: number; term: number; paid: number; insurance: number; ended: boolean; }
 
 export function project(s: AppState, params: ProjectionParams): ProjectionResult {
-  const { horizon, savingsYield, inflation, indexExpenses, indexIncomes, realTerms } = params;
+  const { horizon, savingsYield, inflation, indexExpenses, indexIncomes, realTerms, surplusTargets } = params;
 
   const now = new Date();
   const startYear = now.getFullYear();
@@ -83,6 +88,18 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     term: l.termMonths && l.termMonths > 0 ? l.termMonths : Infinity, paid: 0,
     insurance: l.insurance || 0, ended: (l.outstanding || 0) <= EPS || (l.monthlyPayment || 0) <= 0,
   }));
+
+  // cascade du surplus : actifs cibles ordonnés (existants, éligibles, sans doublon),
+  // chacun avec sa capacité de versement restante (plafond − versements déjà effectués)
+  const targetIdxs: number[] = [];
+  const capLefts: number[] = [];
+  for (const id of surplusTargets ?? []) {
+    const k = assets.findIndex((x) => x.id === id && canReceiveDeposits(x.a));
+    if (k < 0 || targetIdxs.includes(k)) continue;
+    targetIdxs.push(k);
+    const t = assets[k].a;
+    capLefts.push(t.depositCap != null ? Math.max(0, t.depositCap - (t.depositsMade || 0)) : Infinity);
+  }
 
   const yieldM = monthlyRate(savingsYield);
   const flowFactor = (growth: number | undefined, indexFlag: boolean, i: number) =>
@@ -104,11 +121,13 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     const startDebt = sumDebt();
     const startSavings = savings;
     const startVals = assets.map((A) => A.val);
+    const startBals = loans.map((L) => Math.max(0, L.balance));
 
     // accumulateurs de flux de l'année
     const aInc = new Array(assets.length).fill(0);
     const aChg = new Array(assets.length).fill(0);
     const aGro = new Array(assets.length).fill(0);
+    const aDep = new Array(assets.length).fill(0);
     const lInt = new Array(loans.length).fill(0);
     const lPri = new Array(loans.length).fill(0);
     const lIns = new Array(loans.length).fill(0);
@@ -120,7 +139,7 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
 
-    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0;
+    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0, yDep = 0;
 
     // 1re année : uniquement les mois restants de l'année civile en cours
     const months = i === 0 ? 12 - startMonth : 12;
@@ -171,7 +190,23 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       // épargne : rendement réinvesti puis apport net du mois
       const yieldThisMonth = savings > 0 ? savings * yieldM : 0;
       savings += yieldThisMonth;
-      savings += dist + extra - expense - chg - (mI + mP + mIns);
+      const net = dist + extra - expense - chg - (mI + mP + mIns);
+
+      // surplus routé en cascade : chaque cible reçoit jusqu'à son plafond, l'excédent
+      // passe à la suivante ; ce qui reste (et les déficits) est porté par l'épargne
+      const monthDeps = targetIdxs.map(() => 0);
+      let depTotal = 0;
+      if (net > 0) {
+        let rest = net;
+        for (let t = 0; t < targetIdxs.length && rest > 0; t++) {
+          if (!assets[targetIdxs[t]].active) continue;
+          const d = Math.min(rest, capLefts[t]);
+          if (d <= 0) continue;
+          capLefts[t] -= d; rest -= d;
+          monthDeps[t] += d; depTotal += d;
+        }
+      }
+      savings += net - depTotal;
 
       // croissance capitalisée (avec plancher)
       let g = 0;
@@ -183,13 +218,23 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
         A.val += delta; aGro[k] += delta; g += delta;
       }
 
+      // versements APRÈS la croissance : le dépôt du mois se compose à partir du mois suivant
+      for (let t = 0; t < targetIdxs.length; t++) {
+        if (monthDeps[t] > 0) {
+          assets[targetIdxs[t]].val += monthDeps[t];
+          aDep[targetIdxs[t]] += monthDeps[t];
+        }
+      }
+
       yD += dist; yChg += chg; yEx += extra; yExp += expense;
-      yI += mI; yP += mP; yIns += mIns; yG += g; yY += yieldThisMonth;
+      yI += mI; yP += mP; yIns += mIns; yG += g; yY += yieldThisMonth; yDep += depTotal;
     }
 
     const detail: YearDetail = {
-      assets: assets.map((A, k) => (A.active ? { id: A.id, label: A.label, value: startVals[k], growth: aGro[k], income: aInc[k], charges: aChg[k] } : null)).filter(Boolean) as AssetDetail[],
-      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: Math.max(0, L.balance), interest: lInt[k], principal: lPri[k], insurance: lIns[k] })).filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0),
+      assets: assets.map((A, k) => (A.active ? { id: A.id, label: A.label, value: startVals[k], growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] } : null)).filter(Boolean) as AssetDetail[],
+      // balance en DÉBUT d'année, comme les actifs : la colonne patrimoine de la
+      // modale doit sommer exactement au patrimoine net (lui aussi début d'année)
+      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] })).filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0),
       incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * 12 })).filter((d) => d.amount > 0),
       expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * 12 })).filter((d) => d.amount > 0),
     };
@@ -197,18 +242,10 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     points.push({
       yearIndex: i, year, age: ageAt(year),
       grossAssets: startGross, debt: startDebt, savings: startSavings, netWorth: startGross - startDebt + startSavings,
-      distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY,
+      distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY, deposited: yDep,
       detail,
     });
 
-    if (fiYearIndex === null) {
-      const passive = yD + yY;
-      const outflow = yExp + yChg + yI + yP + yIns;
-      if (passive >= outflow && outflow > 0) {
-        fiYearIndex = i;
-        events.push({ yearIndex: i, year, label: "Indépendance financière", kind: "fi" });
-      }
-    }
   }
 
   if (realTerms && inflation !== 0) {
@@ -217,11 +254,22 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       const scale = (v: number) => v / d;
       p.grossAssets = scale(p.grossAssets); p.debt = scale(p.debt); p.savings = scale(p.savings); p.netWorth = scale(p.netWorth);
       p.distributed = scale(p.distributed); p.extra = scale(p.extra); p.expenses = scale(p.expenses); p.charges = scale(p.charges);
-      p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield);
-      p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); });
+      p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield); p.deposited = scale(p.deposited);
+      p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); a.deposit = scale(a.deposit); });
       p.detail.loans.forEach((l) => { l.balance = scale(l.balance); l.interest = scale(l.interest); l.principal = scale(l.principal); l.insurance = scale(l.insurance); });
       p.detail.incomes.forEach((f) => (f.amount = scale(f.amount)));
       p.detail.expenses.forEach((f) => (f.amount = scale(f.amount)));
+    }
+  }
+
+  // Indépendance financière : seuil de patrimoine net FIXÉ PAR L'UTILISATEUR (fiTarget),
+  // pas déduit par le moteur. Évaluée APRÈS le passage en euros constants pour coller
+  // aux montants affichés (en réel, le seuil s'entend en pouvoir d'achat d'aujourd'hui).
+  if (params.fiTarget != null && params.fiTarget > 0) {
+    const idx = points.findIndex((pt) => pt.netWorth >= params.fiTarget!);
+    if (idx >= 0) {
+      fiYearIndex = idx;
+      events.push({ yearIndex: idx, year: points[idx].year, label: "Indépendance financière", kind: "fi" });
     }
   }
 

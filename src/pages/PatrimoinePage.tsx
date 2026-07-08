@@ -8,6 +8,7 @@ import type {
   LiabilityCategory,
   Period,
 } from "../lib/types";
+import { canReceiveDeposits } from "../lib/types";
 import {
   assetYearlyIncome,
   grossWealth,
@@ -476,6 +477,42 @@ function AssetModal({
             Coûts de détention (taxe foncière, charges de copro, assurance PNO…). Déduits des flux, ils permettent le rendement net.
           </span>
         </div>
+
+        {/* --- Bloc 4 : versements (surplus de la projection) --- */}
+        {canReceiveDeposits(draft) && (
+          <div className="span-2 form-block">
+            <div className="block-title">
+              <span className="dot brass" /> Versements · <span className="block-tag">projection</span>
+            </div>
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <div className="field">
+                <label>Plafond de versements (€) — optionnel</label>
+                <input
+                  className="input mono"
+                  type="number"
+                  placeholder="ex. 150 000 pour un PEA"
+                  value={draft.depositCap ?? ""}
+                  onChange={(e) => set({ depositCap: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+              <div className="field">
+                <label>Versements déjà effectués (€)</label>
+                <input
+                  className="input mono"
+                  type="number"
+                  placeholder="0"
+                  value={draft.depositsMade ?? ""}
+                  onChange={(e) => set({ depositsMade: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+            </div>
+            <span className="help" style={{ marginTop: 10 }}>
+              Cet actif peut recevoir le <b>surplus d'épargne</b> de la projection. Le plafond porte sur les
+              <b> dépôts cumulés</b> (ex. 150 000 € pour un PEA) : une fois atteint, les versements s'arrêtent —
+              la valeur, elle, peut le dépasser par la croissance.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="modal-foot">

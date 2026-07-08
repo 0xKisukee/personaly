@@ -892,6 +892,61 @@ select.select {
   font-size: 12px;
   color: var(--ink-mute);
 }
+/* cascade d'affectation du surplus : rangée pleine largeur en bas du panneau */
+.assum-surplus {
+  flex-basis: 100%;
+}
+.assum-cascade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* réserve la place des hints plafond (positionnés en absolu sous les selects) */
+.assum-cascade:has(.help) {
+  padding-bottom: 20px;
+}
+.assum-cascade .select {
+  width: auto;
+  min-width: 150px;
+}
+/* la croix est SOUDÉE au select (capsule unique) : pas d'ambiguïté sur
+   l'actif qu'elle retire — elle appartient au select qu'elle prolonge */
+.cascade-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.cascade-item .select {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 0;
+}
+.cascade-item .icon-btn {
+  width: 30px;
+  height: auto;
+  align-self: stretch;
+  border: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: rgba(10, 13, 11, 0.6);
+}
+.cascade-item .icon-btn:hover {
+  color: var(--drain);
+  background: rgba(213, 152, 115, 0.08);
+}
+/* le hint plafond est sorti du flux : il pend sous le select sans pousser la rangée */
+.cascade-item .help {
+  position: absolute;
+  top: 100%;
+  left: 2px;
+  margin-top: 4px;
+  width: max-content;
+  white-space: nowrap;
+}
+.cascade-add {
+  color: var(--ink-mute);
+}
 .assum-toggles {
   display: flex;
   flex-direction: column;

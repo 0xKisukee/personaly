@@ -16,11 +16,13 @@ function load(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY_STATE;
     const parsed = JSON.parse(raw);
-    return {
-      ...EMPTY_STATE,
-      ...parsed,
-      projection: { ...DEFAULT_PROJECTION, ...(parsed.projection ?? {}) },
-    };
+    const projection = { ...DEFAULT_PROJECTION, ...(parsed.projection ?? {}) };
+    // migration : surplusTargetId (cible unique) -> surplusTargets (cascade)
+    const legacyId = (parsed.projection ?? {}).surplusTargetId;
+    if (!projection.surplusTargets && typeof legacyId === "string" && legacyId) {
+      projection.surplusTargets = [legacyId];
+    }
+    return { ...EMPTY_STATE, ...parsed, projection };
   } catch {
     return EMPTY_STATE;
   }
