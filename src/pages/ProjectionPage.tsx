@@ -1,16 +1,84 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useStore } from "../lib/store";
-import type { ProjectionParams } from "../lib/types";
+import type { AssetCategory, PlannedEvent, ProjectionParams } from "../lib/types";
 import { canReceiveDeposits } from "../lib/types";
 import { project, type ProjectionEvent, type YearDetail, type YearPoint } from "../lib/projection";
 import { grossWealth, totalLiabilities } from "../lib/selectors";
-import { money, signedMoney, percent } from "../lib/format";
+import { money, signedMoney, percent, uid } from "../lib/format";
+import { formatDuration } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
-import { IconChart } from "../components/icons";
+import { IconChart, IconEdit, IconPlus, IconTrash } from "../components/icons";
 
 const HORIZONS = [10, 20, 30, 40];
+
+/* ----------------------- ÉVÉNEMENTS : helpers ----------------------- */
+
+const CAT_LABELS: Record<AssetCategory, string> = {
+  immobilier: "Immobilier", compte_courant: "Compte courant", livret_epargne: "Livret d'épargne",
+  placement: "Placement", vehicule: "Véhicule", autre: "Autre",
+};
+
+const emptyEvent = (year: number): PlannedEvent => ({
+  id: uid(), kind: "cash", label: "", year: Math.min(new Date().getFullYear() + 1, year), amount: 0,
+});
+
+/** Bascule le type d'un brouillon en conservant id / libellé / année. */
+function switchKind(ev: PlannedEvent, kind: PlannedEvent["kind"], s: AppStateLike): PlannedEvent {
+  const base = { id: ev.id, label: ev.label, year: ev.year };
+  switch (kind) {
+    case "cash": return { ...base, kind, amount: 0 };
+    case "buy": return {
+      ...base, kind, price: 0, fees: 0,
+      asset: { id: uid(), label: "", category: "immobilier", value: 0, growthRate: 0, incomeMode: "none" },
+    };
+    case "sell": return { ...base, kind, assetId: sellableAssets(s)[0]?.id ?? "", feesPct: 0 };
+    case "loan": return { ...base, kind, amount: 0, rate: 0, termMonths: 240 };
+    case "repay": return { ...base, kind, loanId: repayableLoans(s)[0]?.id ?? "" };
+  }
+}
+
+interface AppStateLike {
+  assets: { id: string; label: string }[];
+  liabilities: { id: string; label: string }[];
+  events: PlannedEvent[];
+}
+
+/** Actifs vendables : existants + créés par un événement "buy". */
+function sellableAssets(s: AppStateLike): { id: string; label: string }[] {
+  return [
+    ...s.assets.map((a) => ({ id: a.id, label: a.label || "Actif" })),
+    ...s.events.filter((e) => e.kind === "buy").map((e) => ({ id: e.asset.id, label: `${e.label || "Achat"} (${e.year})` })),
+  ];
+}
+
+/** Emprunts remboursables : passifs existants + créés par un événement "loan". */
+function repayableLoans(s: AppStateLike): { id: string; label: string }[] {
+  return [
+    ...s.liabilities.map((l) => ({ id: l.id, label: l.label || "Emprunt" })),
+    ...s.events.filter((e) => e.kind === "loan").map((e) => ({ id: e.id, label: `${e.label || "Emprunt"} (${e.year})` })),
+  ];
+}
+
+function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
+  switch (ev.kind) {
+    case "buy":
+      return `Achat · ${money(ev.price)}${ev.fees ? ` + ${money(ev.fees)} de frais` : ""} · ${CAT_LABELS[ev.asset.category]}${ev.asset.growthRate ? ` ${ev.asset.growthRate > 0 ? "+" : ""}${percent(ev.asset.growthRate)}/an` : ""}`;
+    case "sell": {
+      const label = sellableAssets(s).find((a) => a.id === ev.assetId)?.label ?? "actif inconnu";
+      return `Vente de ${label} · ${ev.price != null ? money(ev.price) : "à la valeur projetée"}${ev.feesPct ? ` · frais ${percent(ev.feesPct)}` : ""}`;
+    }
+    case "loan":
+      return `Nouvel emprunt · ${money(ev.amount)} à ${percent(ev.rate)} sur ${formatDuration(ev.termMonths)}${ev.insurance ? ` + ${money(ev.insurance)}/mois d'assurance` : ""}`;
+    case "cash":
+      return `${ev.amount >= 0 ? "Rentrée" : "Sortie"} ponctuelle · ${signedMoney(ev.amount)}`;
+    case "repay": {
+      const label = repayableLoans(s).find((l) => l.id === ev.loanId)?.label ?? "emprunt inconnu";
+      return `Remboursement anticipé de ${label} · ${ev.amount != null ? money(ev.amount) : "totalité"}`;
+    }
+  }
+}
 
 const compact = new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 });
 const compactEur = (n: number) => compact.format(n) + " €";
@@ -23,10 +91,22 @@ export default function ProjectionPage() {
   const setP = (patch: Partial<ProjectionParams>) =>
     update((s) => ({ ...s, projection: { ...s.projection, ...patch } }));
 
-  const { points, events, fiYearIndex } = useMemo(() => project(state, p), [state, p]);
+  const { points, events, warnings, fiYearIndex } = useMemo(() => project(state, p), [state, p]);
+  const [evDraft, setEvDraft] = useState<PlannedEvent | null>(null);
 
   const hasData =
-    grossWealth(state) > 0 || totalLiabilities(state) > 0 || state.incomes.length > 0 || state.expenses.length > 0;
+    grossWealth(state) > 0 || totalLiabilities(state) > 0 || state.incomes.length > 0 ||
+    state.expenses.length > 0 || state.events.length > 0;
+
+  const saveEvent = (ev: PlannedEvent) => {
+    update((s) => {
+      const exists = s.events.some((x) => x.id === ev.id);
+      return { ...s, events: exists ? s.events.map((x) => (x.id === ev.id ? ev : x)) : [...s.events, ev] };
+    });
+    setEvDraft(null);
+  };
+  const delEvent = (id: string) => update((s) => ({ ...s, events: s.events.filter((x) => x.id !== id) }));
+  const sortedEvents = [...state.events].sort((a, b) => a.year - b.year);
 
   const now = points[0];
   const end = points[points.length - 1];
@@ -164,6 +244,45 @@ export default function ProjectionPage() {
             </div>
           </motion.div>
 
+          {/* --------- événements datés --------- */}
+          <section className="section" style={{ marginTop: 0, marginBottom: 24 }}>
+            <div className="section-head">
+              <h2>Événements</h2>
+              <span className="count">{state.events.length}</span>
+              <span className="spacer" />
+              <button className="btn" onClick={() => setEvDraft(emptyEvent(points[points.length - 1].year))}>
+                <IconPlus size={16} /> Ajouter
+              </button>
+            </div>
+            {sortedEvents.length > 0 && (
+              <div className="rows">
+                {sortedEvents.map((ev) => (
+                  <div className="row" key={ev.id}>
+                    <div className="row-ic" style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{"⚑"}</div>
+                    <div className="row-main">
+                      <div className="row-title">{ev.label || "Événement"}</div>
+                      <div className="row-meta">
+                        <span className="tag">{ev.year}</span> · <span>{eventSummary(ev, state)}</span>
+                      </div>
+                    </div>
+                    <div className="row-actions">
+                      <button className="icon-btn" onClick={() => setEvDraft({ ...ev })} aria-label="Modifier"><IconEdit size={16} /></button>
+                      <button className="icon-btn danger" onClick={() => delEvent(ev.id)} aria-label="Supprimer"><IconTrash size={16} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* --------- alertes moteur (épargne négative, événement ignoré…) --------- */}
+          {warnings.slice(0, 3).map((w, i) => (
+            <div key={i} className="fi-banner" style={{ borderColor: "rgba(213,152,115,0.4)", background: "rgba(213,152,115,0.07)" }}>
+              <span className="fi-dot" style={{ background: "var(--drain)", boxShadow: "0 0 10px var(--drain)" }} />
+              {w.label}
+            </div>
+          ))}
+
           {/* --------- hero --------- */}
           <motion.div className="wealth-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
             <div className="wealth-cell lead">
@@ -281,7 +400,222 @@ export default function ProjectionPage() {
       {selPoint && (
         <YearDetailModal point={selPoint} real={p.realTerms} onClose={() => setSelYear(null)} />
       )}
+      {evDraft && (
+        <EventModal draft={evDraft} s={state} onChange={setEvDraft} onSave={saveEvent} onClose={() => setEvDraft(null)} />
+      )}
     </>
+  );
+}
+
+/* ----------------------- EVENT MODAL ----------------------- */
+
+const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
+  { id: "cash", label: "Rentrée / Sortie" },
+  { id: "buy", label: "Achat" },
+  { id: "sell", label: "Vente" },
+  { id: "loan", label: "Emprunt" },
+  { id: "repay", label: "Remboursement" },
+];
+
+function EventModal({ draft, s, onChange, onSave, onClose }: {
+  draft: PlannedEvent;
+  s: AppStateLike;
+  onChange: (e: PlannedEvent) => void;
+  onSave: (e: PlannedEvent) => void;
+  onClose: () => void;
+}) {
+  const set = (patch: object) => onChange({ ...draft, ...patch } as PlannedEvent);
+  const currentYear = new Date().getFullYear();
+
+  const valid =
+    draft.label.trim().length > 0 &&
+    draft.year >= currentYear &&
+    (draft.kind === "cash" ? draft.amount !== 0
+      : draft.kind === "buy" ? draft.price > 0
+      : draft.kind === "sell" ? !!draft.assetId
+      : draft.kind === "loan" ? draft.amount > 0 && draft.termMonths > 0
+      : !!draft.loanId);
+
+  // à l'enregistrement d'un achat : l'actif embarqué hérite du libellé de l'événement
+  const handleSave = () =>
+    onSave(draft.kind === "buy" ? { ...draft, asset: { ...draft.asset, label: draft.asset.label || draft.label } } : draft);
+
+  return (
+    <Modal
+      open
+      title={s.events.some((x) => x.id === draft.id) ? "Modifier l'événement" : "Nouvel événement"}
+      subtitle="Appliqué en début d'année. Les événements sont atomiques : un achat financé = un emprunt + un achat la même année."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <div className="field span-2">
+          <label>Type</label>
+          <div className="segment">
+            {EVENT_KINDS.map((k) => (
+              <button key={k.id} data-on={draft.kind === k.id} onClick={() => onChange(switchKind(draft, k.id, s))}>
+                {k.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label>Libellé</label>
+          <input className="input" autoFocus placeholder="ex. Achat apt Lyon, Héritage…"
+            value={draft.label} onChange={(e) => set({ label: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Année</label>
+          <input className="input mono" type="number" min={currentYear}
+            value={draft.year || ""} onChange={(e) => set({ year: Number(e.target.value) })} />
+        </div>
+
+        {draft.kind === "cash" && (
+          <>
+            <div className="field">
+              <label>Sens</label>
+              <div className="segment">
+                <button data-on={draft.amount >= 0} onClick={() => set({ amount: Math.abs(draft.amount) })}>Rentrée</button>
+                <button data-on={draft.amount < 0} onClick={() => set({ amount: -Math.abs(draft.amount || 0) })}>Sortie</button>
+              </div>
+            </div>
+            <div className="field">
+              <label>Montant (€)</label>
+              <input className="input mono" type="number" placeholder="ex. 20 000"
+                value={Math.abs(draft.amount) || ""}
+                onChange={(e) => set({ amount: (draft.amount < 0 ? -1 : 1) * Math.abs(Number(e.target.value)) })} />
+            </div>
+            <span className="help span-2">Héritage, prime, vente ponctuelle… ou travaux, mariage. Arrive / part de l'épargne.</span>
+          </>
+        )}
+
+        {draft.kind === "buy" && (
+          <>
+            <div className="field">
+              <label>Prix d'achat (€)</label>
+              <input className="input mono" type="number" value={draft.price || ""}
+                onChange={(e) => set({ price: Number(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>Frais (notaire…) (€)</label>
+              <input className="input mono" type="number" placeholder="sortie sèche" value={draft.fees || ""}
+                onChange={(e) => set({ fees: e.target.value ? Number(e.target.value) : undefined })} />
+            </div>
+            <div className="field">
+              <label>Catégorie de l'actif</label>
+              <select className="select" value={draft.asset.category}
+                onChange={(e) => set({ asset: { ...draft.asset, category: e.target.value as AssetCategory } })}>
+                {Object.entries(CAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Évolution de la valeur (%/an)</label>
+              <input className="input mono" type="number" step="0.1" placeholder="ex. +2 immo"
+                value={draft.asset.growthRate || ""}
+                onChange={(e) => set({ asset: { ...draft.asset, growthRate: Number(e.target.value) } })} />
+            </div>
+            <div className="field">
+              <label>Revenu distribué (€/mois)</label>
+              <input className="input mono" type="number" placeholder="ex. loyer perçu, 0 = aucun"
+                value={draft.asset.income?.amount || ""}
+                onChange={(e) => {
+                  const amount = Number(e.target.value);
+                  set({ asset: { ...draft.asset, incomeMode: amount > 0 ? "amount" : "none", income: { amount, period: "monthly" } } });
+                }} />
+            </div>
+            <div className="field">
+              <label>Charges (€/an)</label>
+              <input className="input mono" type="number" placeholder="taxe foncière, copro…"
+                value={draft.asset.charges?.amount || ""}
+                onChange={(e) => set({ asset: { ...draft.asset, charges: { amount: Number(e.target.value), period: "yearly" } } })} />
+            </div>
+            <span className="help span-2">
+              Payé <b>cash</b> (prix + frais sortent de l'épargne). Pour un achat financé, ajoute un événement
+              <b> Emprunt</b> la même année : le capital arrive en épargne et couvre le prix — la différence est ton apport.
+            </span>
+          </>
+        )}
+
+        {draft.kind === "sell" && (
+          <>
+            <div className="field">
+              <label>Actif vendu</label>
+              <select className="select" value={draft.assetId} onChange={(e) => set({ assetId: e.target.value })}>
+                {sellableAssets(s).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Prix de vente (€) — optionnel</label>
+              <input className="input mono" type="number" placeholder="vide = valeur projetée"
+                value={draft.price ?? ""}
+                onChange={(e) => set({ price: e.target.value ? Number(e.target.value) : undefined })} />
+            </div>
+            <div className="field">
+              <label>Frais de vente (%)</label>
+              <input className="input mono" type="number" step="0.1" placeholder="ex. 5 (agence)"
+                value={draft.feesPct || ""}
+                onChange={(e) => set({ feesPct: e.target.value ? Number(e.target.value) : undefined })} />
+            </div>
+            <span className="help span-2">
+              Le produit net arrive en <b>épargne</b>. Si un emprunt reste attaché au bien, ajoute un événement
+              <b> Remboursement</b> la même année. Prix fixé ≠ valeur projetée → plus/moins-value réalisée.
+            </span>
+          </>
+        )}
+
+        {draft.kind === "loan" && (
+          <>
+            <div className="field">
+              <label>Capital emprunté (€)</label>
+              <input className="input mono" type="number" value={draft.amount || ""}
+                onChange={(e) => set({ amount: Number(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>Taux annuel (%)</label>
+              <input className="input mono" type="number" step="0.01" placeholder="ex. 3.4"
+                value={draft.rate || ""} onChange={(e) => set({ rate: Number(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>Durée (années)</label>
+              <input className="input mono" type="number" step="0.5"
+                value={draft.termMonths ? draft.termMonths / 12 : ""}
+                onChange={(e) => set({ termMonths: Math.round(Number(e.target.value) * 12) })} />
+            </div>
+            <div className="field">
+              <label>Assurance (€/mois) — optionnel</label>
+              <input className="input mono" type="number" value={draft.insurance || ""}
+                onChange={(e) => set({ insurance: e.target.value ? Number(e.target.value) : undefined })} />
+            </div>
+            <span className="help span-2">
+              Le capital arrive en <b>épargne</b> à la date ; la mensualité se calcule seule et l'emprunt
+              s'amortit jusqu'à son terme{draft.termMonths ? ` (fin ${draft.year + Math.round(draft.termMonths / 12)})` : ""}.
+            </span>
+          </>
+        )}
+
+        {draft.kind === "repay" && (
+          <>
+            <div className="field">
+              <label>Emprunt à rembourser</label>
+              <select className="select" value={draft.loanId} onChange={(e) => set({ loanId: e.target.value })}>
+                {repayableLoans(s).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Montant (€) — optionnel</label>
+              <input className="input mono" type="number" placeholder="vide = solde total"
+                value={draft.amount ?? ""}
+                onChange={(e) => set({ amount: e.target.value ? Number(e.target.value) : undefined })} />
+            </div>
+            <span className="help span-2">Prélevé sur l'épargne à la date ; neutre pour le patrimoine (la dette baisse d'autant).</span>
+          </>
+        )}
+      </div>
+
+      <div className="modal-foot">
+        <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+        <button className="btn btn-brass" onClick={handleSave} disabled={!valid}>Enregistrer</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -412,7 +746,8 @@ function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boo
   const d: YearDetail = point.detail;
   const suffix = real ? " · € constants" : "";
   const enrichment = point.distributed + point.extra + point.savingsYield + point.growth
-    - point.expenses - point.charges - point.interest - point.insurance;
+    + point.eventCash + point.eventGain
+    - point.expenses - point.charges - point.interest - point.insurance - point.eventFees;
   return (
     <Modal open title={`Composition ${point.year}`} subtitle={`Patrimoine net ${money(point.netWorth)}${point.age !== null ? ` · ${point.age} ans` : ""}${suffix}`} onClose={onClose}>
       <div className="yd-grid">
@@ -458,6 +793,10 @@ function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boo
           {point.deposited > 0 && d.assets.filter((a) => a.deposit > 0).map((a) => (
             <YdFlow key={a.id} label={a.label} v={a.deposit} neutral sub />
           ))}
+          {point.eventCash !== 0 && <YdFlow label="Rentrées / sorties ponctuelles" v={point.eventCash} pos={point.eventCash >= 0} />}
+          {point.eventGain !== 0 && <YdFlow label="Plus/moins-value réalisée" v={point.eventGain} pos={point.eventGain >= 0} />}
+          {point.eventFees > 0 && <YdFlow label="Frais d'événements" v={-point.eventFees} />}
+          {d.events.map((e) => <YdFlow key={e.id} label={`⚑ ${e.label} (cash)`} v={e.cash} neutral sub />)}
           <div className="yd-row yd-total">
             <span>Enrichissement</span>
             <span className="mono" style={{ color: "var(--brass-bright)" }}>{signedMoney(enrichment)}</span>

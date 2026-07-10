@@ -87,6 +87,7 @@ AppState = {
   liabilities: Liability[]
   incomes:     IncomeItem[]         // revenus complémentaires (FLUX)
   expenses:    ExpenseItem[]        // dépenses & impôts (FLUX)
+  events:      PlannedEvent[]       // événements datés de la projection
   projection:  ProjectionParams     // hypothèses de la page Projection (persistées)
 }
 ```
@@ -121,6 +122,26 @@ valeur : la croissance peut le dépasser, seuls les versements s'arrêtent.
 `rate`, `termMonths` (durée restante → date de fin), `monthlyPayment`
 (**calculée automatiquement** depuis capital + taux + durée, ou saisie si
 `autoPayment = false`). Voir `monthlyPayment()` dans `finance.ts`.
+
+### PlannedEvent — événements datés, ATOMIQUES et COMPOSABLES
+
+Cinq types (`kind`), datés à l'**année** (appliqués au 1er mois, avant les flux) :
+`buy` (achat d'actif payé cash, avec `fees` sortie sèche — l'actif embarqué est un
+`Asset` complet : croissance, revenu, charges…), `sell` (produit → épargne ; prix
+fixé optionnel, sinon valeur projetée), `loan` (nouvel emprunt : capital → épargne,
+mensualité calculée), `cash` (rentrée/sortie ponctuelle), `repay` (remboursement
+anticipé). **Les crédits sont indépendants des biens, comme sur la page
+Patrimoine** : un achat financé = `loan` + `buy` la même année ; une vente avec
+crédit en cours = `sell` + `repay`. Ordre d'application dans une année : le cash
+entre d'abord (sell → cash → loan) puis sort (repay → buy).
+
+**Comptabilité** : tous ces événements sont des transferts **neutres** pour le
+patrimoine net, SAUF les frais (`eventFees`, sortie sèche), l'écart prix de vente
+fixé − valeur projetée (`eventGain`, PV réalisée) et les rentrées/sorties
+(`eventCash`). Ces trois termes entrent dans l'enrichissement pour préserver
+l'identité « patrimoine début + enrichissement = début suivant » (testée). Si un
+événement rend l'épargne négative ou est inapplicable (actif déjà vendu…), le
+moteur émet un **warning** affiché en bannière — jamais d'annulation silencieuse.
 
 ### IncomeItem / ExpenseItem (FLUX)
 
@@ -224,6 +245,9 @@ Simulation **mois par mois** sur un horizon réglable (10/20/30/40 ans) — mote
 - ❌ **Objectif daté retiré** (« X € en année Y » + bannière d'écart) : jugé peu utile,
   redondant avec le seuil d'indépendance qui répond à la meilleure question (« quand
   est-ce que j'atteins X ? »).
+- ✅ **Événements atomiques, crédits indépendants des biens** : pas d'emprunt embarqué
+  dans un achat ni de « solder l'emprunt » dans une vente — on compose des événements
+  simples la même année (cohérent avec le modèle Patrimoine).
 
 ---
 
@@ -238,13 +262,13 @@ de valeur**, **patrimoine d'indépendance** (seuil `fiTarget` saisi par l'utilis
 année d'atteinte), **détail d'une année**
 (clic sur une ligne → composition patrimoine + flux), 1re année partielle (mois restants),
 **affectation du surplus en cascade d'actifs** (PEA → livret → … au lieu de l'épargne,
-avec **plafond de versements** par actif — `depositCap`).
+avec **plafond de versements** par actif — `depositCap`), **événements datés**
+(achat/vente/emprunt/rentrée/remboursement — section sur la page Projection,
+marqueurs ⚑ sur le graphe, alertes d'épargne négative).
 
 ### PROJECTION — pistes restantes
 - **Scénarios comparés** (pessimiste / médian / optimiste) côte à côte — volontairement
   non implémenté pour l'instant.
-- **Événements ponctuels** (achat/vente d'actif, nouvel emprunt daté, prime/héritage) :
-  retirés car buggés, à re-concevoir proprement plus tard.
 - Horizon personnalisé au-delà des presets ; taux d'épargne requis pour atteindre le
   patrimoine d'indépendance.
 

@@ -152,6 +152,71 @@ export interface ExpenseItem {
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
 
+/* --------------------------- ÉVÉNEMENTS --------------------------- */
+
+/**
+ * Événements datés de la projection — ATOMIQUES et COMPOSABLES : comme sur la
+ * page Patrimoine, les crédits sont indépendants des biens. Un achat financé =
+ * deux événements la même année (« Nouvel emprunt » + « Achat »).
+ *
+ * Datés à l'ANNÉE (appliqués au 1er mois de l'année cible, avant les flux).
+ * Ordre d'application dans une même année : le cash ENTRE d'abord
+ * (ventes → rentrées/sorties → nouveaux emprunts), puis SORT
+ * (remboursements → achats).
+ *
+ * Comptabilité : achat/vente/emprunt/remboursement sont des TRANSFERTS neutres
+ * pour le patrimoine net, SAUF les frais (sortie sèche) et l'écart entre prix
+ * de vente fixé et valeur projetée (plus/moins-value réalisée). Ces termes sont
+ * exposés dans YearPoint (eventCash / eventFees / eventGain) pour préserver
+ * l'identité « patrimoine début + enrichissement = début suivant ».
+ */
+interface EventBase {
+  id: string;
+  label: string;
+  year: number;
+  note?: string;
+}
+
+/** Achat d'actif, payé cash (price + fees sortent de l'épargne — un emprunt de la même année peut la re-remplir). */
+export interface BuyAssetEvent extends EventBase {
+  kind: "buy";
+  asset: Asset; // l'actif COMPLET (croissance, revenu distribué, charges…), créé à la date
+  price: number; // valeur d'entrée de l'actif
+  fees?: number; // frais (notaire, dossier) — sortie sèche, ne crée pas de valeur
+}
+
+/** Vente d'un actif (existant ou acheté par un événement "buy") : produit → épargne. */
+export interface SellAssetEvent extends EventBase {
+  kind: "sell";
+  assetId: string;
+  price?: number; // prix fixé ; absent = valeur PROJETÉE de l'actif à cette date
+  feesPct?: number; // frais de vente (agence…) en % du prix
+}
+
+/** Nouvel emprunt amortissable : le capital arrive en épargne, le passif s'amortit dès le mois suivant. */
+export interface NewLoanEvent extends EventBase {
+  kind: "loan";
+  amount: number; // capital emprunté
+  rate: number; // taux annuel (%)
+  termMonths: number; // durée
+  insurance?: number; // assurance mensuelle, en plus de la mensualité
+}
+
+/** Rentrée (+) ou sortie (−) ponctuelle : héritage, prime, travaux, mariage… */
+export interface CashEvent extends EventBase {
+  kind: "cash";
+  amount: number;
+}
+
+/** Remboursement anticipé d'un emprunt (partiel ou total), prélevé sur l'épargne. */
+export interface RepayLoanEvent extends EventBase {
+  kind: "repay";
+  loanId: string; // id de passif existant ou d'événement "loan"
+  amount?: number; // partiel ; absent = solde total à la date
+}
+
+export type PlannedEvent = BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent;
+
 /* --------------------------- PROJECTION --------------------------- */
 
 /** Hypothèses de la page Projection (persistées). */
@@ -186,6 +251,7 @@ export interface AppState {
   liabilities: Liability[];
   incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
   expenses: ExpenseItem[]; // dépenses & impôts
+  events: PlannedEvent[]; // événements datés (achat/vente d'actif, rentrée/sortie, remboursement)
   projection: ProjectionParams;
 }
 
@@ -195,5 +261,6 @@ export const EMPTY_STATE: AppState = {
   liabilities: [],
   incomes: [],
   expenses: [],
+  events: [],
   projection: DEFAULT_PROJECTION,
 };

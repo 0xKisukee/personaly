@@ -7,9 +7,9 @@
    l'épargne OU affectation du surplus en CASCADE d'actifs éligibles (chaque actif
    reçoit jusqu'à son plafond de versements, l'excédent passe au suivant, le reste
    retombe dans l'épargne ; les déficits restent portés par l'épargne),
-   inflation / euros constants.
-   (Les ÉVÉNEMENTS datés — achat/vente, nouvel emprunt — ont été retirés ;
-   à re-concevoir, cf. README.)
+   inflation / euros constants, et ÉVÉNEMENTS datés atomiques (achat/vente d'actif,
+   nouvel emprunt, rentrée/sortie, remboursement anticipé — voir types.ts pour
+   l'ordre d'application et les règles comptables).
 
    Chaque point d'année porte le patrimoine au DÉBUT de l'année et les FLUX qui se
    produisent PENDANT cette année-là (composition disponible via `detail`).
@@ -17,19 +17,23 @@
    la 1re année ; les intérêts d'emprunt décroissent donc dès l'année suivante.
    =========================================================================== */
 
-import type { Asset, AppState, ProjectionParams } from "./types";
+import type { Asset, AppState, PlannedEvent, ProjectionParams } from "./types";
 import { canReceiveDeposits } from "./types";
 import { toMonthly, isActiveYear } from "./format";
+import { monthlyPayment } from "./finance";
 
 export interface AssetDetail { id: string; label: string; value: number; growth: number; income: number; charges: number; deposit: number; }
 export interface LoanDetail { id: string; label: string; balance: number; interest: number; principal: number; insurance: number; }
 export interface FlowDetail { id: string; label: string; amount: number; }
+/** Un événement appliqué cette année-là : impact cash + termes d'enrichissement (frais, PV réalisée). */
+export interface EventDetail { id: string; label: string; kind: PlannedEvent["kind"]; cash: number; fees: number; gain: number; }
 
 export interface YearDetail {
   assets: AssetDetail[];
   loans: LoanDetail[];
   incomes: FlowDetail[];
   expenses: FlowDetail[];
+  events: EventDetail[];
 }
 
 export interface YearPoint {
@@ -50,6 +54,9 @@ export interface YearPoint {
   growth: number;
   savingsYield: number;
   deposited: number; // surplus versé dans l'actif cible (transfert, neutre pour le patrimoine)
+  eventCash: number; // rentrées/sorties ponctuelles (kind "cash") — compte dans l'enrichissement
+  eventFees: number; // frais d'achat/vente — sortie sèche, compte dans l'enrichissement
+  eventGain: number; // plus/moins-value réalisée (prix de vente fixé − valeur projetée)
   detail: YearDetail;
 }
 
@@ -57,12 +64,15 @@ export interface ProjectionEvent {
   yearIndex: number;
   year: number;
   label: string;
-  kind: "loan" | "fi";
+  kind: "loan" | "fi" | "planned";
 }
+
+export interface ProjectionWarning { year: number; label: string; }
 
 export interface ProjectionResult {
   points: YearPoint[];
   events: ProjectionEvent[];
+  warnings: ProjectionWarning[];
   fiYearIndex: number | null;
 }
 
@@ -89,6 +99,36 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     insurance: l.insurance || 0, ended: (l.outstanding || 0) <= EPS || (l.monthlyPayment || 0) <= 0,
   }));
 
+  // événements datés dans l'horizon, groupés par année d'application ; dans une même
+  // année, le cash ENTRE d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats)
+  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4 };
+  const plannedByYear = new Map<number, PlannedEvent[]>();
+  for (const ev of s.events ?? []) {
+    const idx = ev.year - startYear;
+    if (idx < 0 || idx > horizon) continue;
+    const list = plannedByYear.get(idx) ?? [];
+    list.push(ev);
+    plannedByYear.set(idx, list);
+  }
+  for (const list of plannedByYear.values()) list.sort((a, b) => EVENT_ORDER[a.kind] - EVENT_ORDER[b.kind]);
+
+  // les actifs achetés et emprunts contractés par événement sont pré-créés INACTIFS
+  // (tableaux de taille fixe : les accumulateurs annuels restent alignés)
+  for (const list of plannedByYear.values()) {
+    for (const ev of list) {
+      if (ev.kind === "buy") {
+        assets.push({ id: ev.asset.id, label: ev.asset.label || ev.label || "Actif", a: ev.asset, val: 0, active: false });
+      } else if (ev.kind === "loan") {
+        loans.push({
+          id: ev.id, label: ev.label || "Emprunt", balance: 0,
+          mRate: (ev.rate || 0) / 100 / 12, payment: 0,
+          term: ev.termMonths > 0 ? ev.termMonths : Infinity, paid: 0,
+          insurance: ev.insurance || 0, ended: true,
+        });
+      }
+    }
+  }
+
   // cascade du surplus : actifs cibles ordonnés (existants, éligibles, sans doublon),
   // chacun avec sa capacité de versement restante (plafond − versements déjà effectués)
   const targetIdxs: number[] = [];
@@ -111,6 +151,7 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
   let savings = 0;
   const points: YearPoint[] = [];
   const events: ProjectionEvent[] = [];
+  const warnings: ProjectionWarning[] = [];
   let fiYearIndex: number | null = null;
 
   for (let i = 0; i <= horizon; i++) {
@@ -122,6 +163,69 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     const startSavings = savings;
     const startVals = assets.map((A) => A.val);
     const startBals = loans.map((L) => Math.max(0, L.balance));
+    const startActive = assets.map((A) => A.active);
+
+    // ---- ÉVÉNEMENTS de l'année : appliqués APRÈS l'instantané (ils font partie
+    // des flux de l'année) et AVANT le 1er mois. Transferts neutres pour le
+    // patrimoine net, sauf frais (eventFees) et PV réalisée (eventGain).
+    let evCash = 0, evFees = 0, evGain = 0;
+    const evDetails: EventDetail[] = [];
+    for (const ev of plannedByYear.get(i) ?? []) {
+      let cash = 0, fees = 0, gain = 0;
+      if (ev.kind === "cash") {
+        cash = ev.amount || 0;
+        savings += cash;
+        evCash += cash;
+      } else if (ev.kind === "sell") {
+        const k = assets.findIndex((x) => x.id === ev.assetId);
+        if (k < 0 || !assets[k].active) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : actif introuvable ou déjà vendu` });
+          continue;
+        }
+        const projVal = assets[k].val;
+        const priceUsed = ev.price ?? projVal;
+        fees = priceUsed * ((ev.feesPct ?? 0) / 100);
+        gain = priceUsed - projVal;
+        assets[k].active = false;
+        assets[k].val = 0;
+        cash = priceUsed - fees;
+        savings += cash;
+        evFees += fees; evGain += gain;
+      } else if (ev.kind === "loan") {
+        const L = loans.find((l) => l.id === ev.id)!;
+        L.balance = ev.amount || 0;
+        L.payment = monthlyPayment(ev.amount || 0, ev.rate || 0, ev.termMonths);
+        L.paid = 0;
+        L.ended = L.balance <= EPS || L.payment <= 0;
+        cash = ev.amount || 0;
+        savings += cash;
+      } else if (ev.kind === "repay") {
+        const L = loans.find((l) => l.id === ev.loanId);
+        if (!L || L.ended || L.balance <= EPS) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : emprunt introuvable ou déjà soldé` });
+          continue;
+        }
+        const amt = Math.min(ev.amount ?? L.balance, L.balance);
+        L.balance -= amt;
+        if (L.balance <= EPS) L.ended = true;
+        cash = -amt;
+        savings += cash;
+      } else if (ev.kind === "buy") {
+        const k = assets.findIndex((x) => x.id === ev.asset.id);
+        if (k < 0 || assets[k].active) continue;
+        assets[k].active = true;
+        assets[k].val = ev.price || 0;
+        fees = ev.fees || 0;
+        cash = -((ev.price || 0) + fees);
+        savings += cash;
+        evFees += fees;
+      }
+      evDetails.push({ id: ev.id, label: ev.label || ev.kind, kind: ev.kind, cash, fees, gain });
+      events.push({ yearIndex: i, year, label: ev.label || ev.kind, kind: "planned" });
+      if (cash < 0 && savings < -EPS) {
+        warnings.push({ year, label: `Épargne négative après « ${ev.label} » (${year})` });
+      }
+    }
 
     // accumulateurs de flux de l'année
     const aInc = new Array(assets.length).fill(0);
@@ -231,18 +335,22 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     }
 
     const detail: YearDetail = {
-      assets: assets.map((A, k) => (A.active ? { id: A.id, label: A.label, value: startVals[k], growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] } : null)).filter(Boolean) as AssetDetail[],
+      // actifs ACTIFS AU DÉBUT de l'année (un actif acheté cette année apparaît
+      // l'année suivante ; un actif vendu cette année figure à sa valeur de début)
+      assets: assets.map((A, k) => (startActive[k] ? { id: A.id, label: A.label, value: startVals[k], growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] } : null)).filter(Boolean) as AssetDetail[],
       // balance en DÉBUT d'année, comme les actifs : la colonne patrimoine de la
       // modale doit sommer exactement au patrimoine net (lui aussi début d'année)
-      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] })).filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0),
+      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] })).filter((d) => d.balance > EPS),
       incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * 12 })).filter((d) => d.amount > 0),
       expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * 12 })).filter((d) => d.amount > 0),
+      events: evDetails,
     };
 
     points.push({
       yearIndex: i, year, age: ageAt(year),
       grossAssets: startGross, debt: startDebt, savings: startSavings, netWorth: startGross - startDebt + startSavings,
       distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY, deposited: yDep,
+      eventCash: evCash, eventFees: evFees, eventGain: evGain,
       detail,
     });
 
@@ -255,10 +363,12 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       p.grossAssets = scale(p.grossAssets); p.debt = scale(p.debt); p.savings = scale(p.savings); p.netWorth = scale(p.netWorth);
       p.distributed = scale(p.distributed); p.extra = scale(p.extra); p.expenses = scale(p.expenses); p.charges = scale(p.charges);
       p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield); p.deposited = scale(p.deposited);
+      p.eventCash = scale(p.eventCash); p.eventFees = scale(p.eventFees); p.eventGain = scale(p.eventGain);
       p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); a.deposit = scale(a.deposit); });
       p.detail.loans.forEach((l) => { l.balance = scale(l.balance); l.interest = scale(l.interest); l.principal = scale(l.principal); l.insurance = scale(l.insurance); });
       p.detail.incomes.forEach((f) => (f.amount = scale(f.amount)));
       p.detail.expenses.forEach((f) => (f.amount = scale(f.amount)));
+      p.detail.events.forEach((e) => { e.cash = scale(e.cash); e.fees = scale(e.fees); e.gain = scale(e.gain); });
     }
   }
 
@@ -273,5 +383,5 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     }
   }
 
-  return { points, events, fiYearIndex };
+  return { points, events, warnings, fiYearIndex };
 }
