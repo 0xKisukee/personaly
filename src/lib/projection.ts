@@ -366,8 +366,10 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       // modale doit sommer exactement au patrimoine net (lui aussi début d'année)
       loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] }))
         .filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0 || d.insurance > 0),
-      incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * 12 })).filter((d) => d.amount > 0),
-      expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * 12 })).filter((d) => d.amount > 0),
+      // × months (pas × 12) : la 1re année partielle ne compte que les mois restants,
+      // les sous-lignes doivent sommer au total de l'année
+      incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * months })).filter((d) => d.amount > 0),
+      expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * months })).filter((d) => d.amount > 0),
       events: evDetails,
     };
 

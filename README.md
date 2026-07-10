@@ -24,7 +24,15 @@ npm install
 npm run dev      # serveur de dev
 npm run build    # tsc -b + build de prod (à lancer pour vérifier les types)
 npm run preview  # prévisualiser le build
+npm test         # vitest — À LANCER APRÈS TOUTE MODIF DU MOTEUR (src/lib/*.test.ts)
 ```
+
+Les tests couvrent le moteur de projection et ses **invariants structurels** (voir
+`src/lib/projection.test.ts`) : colonne patrimoine de la modale = patrimoine net,
+pont « début + enrichissement = début suivant », sous-lignes qui somment aux
+agrégats, neutralité des transferts (cascade, versements, achats/ventes),
+plafonds de versements, événements (les 6 types + ordre + désactivation),
+inflation/euros constants, 1re année partielle. Le temps y est figé (fake timers).
 
 ---
 
