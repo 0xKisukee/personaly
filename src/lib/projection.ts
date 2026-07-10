@@ -335,12 +335,16 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     }
 
     const detail: YearDetail = {
-      // actifs ACTIFS AU DÉBUT de l'année (un actif acheté cette année apparaît
-      // l'année suivante ; un actif vendu cette année figure à sa valeur de début)
-      assets: assets.map((A, k) => (startActive[k] ? { id: A.id, label: A.label, value: startVals[k], growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] } : null)).filter(Boolean) as AssetDetail[],
+      // inclus si présent AU DÉBUT de l'année (colonne patrimoine : value = valeur de
+      // début, 0 pour un actif acheté dans l'année) OU s'il a eu une activité dans
+      // l'année (ses flux doivent apparaître dans les sous-lignes de la modale)
+      assets: assets.map((A, k) => (startActive[k] || aGro[k] !== 0 || aInc[k] !== 0 || aChg[k] !== 0 || aDep[k] !== 0
+        ? { id: A.id, label: A.label, value: startActive[k] ? startVals[k] : 0, growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] }
+        : null)).filter(Boolean) as AssetDetail[],
       // balance en DÉBUT d'année, comme les actifs : la colonne patrimoine de la
       // modale doit sommer exactement au patrimoine net (lui aussi début d'année)
-      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] })).filter((d) => d.balance > EPS),
+      loans: loans.map((L, k) => ({ id: L.id, label: L.label, balance: startBals[k], interest: lInt[k], principal: lPri[k], insurance: lIns[k] }))
+        .filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0 || d.insurance > 0),
       incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * 12 })).filter((d) => d.amount > 0),
       expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * 12 })).filter((d) => d.amount > 0),
       events: evDetails,

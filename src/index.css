@@ -947,6 +947,21 @@ select.select {
 .cascade-add {
   color: var(--ink-mute);
 }
+
+/* lignes dépliables de la modale de composition */
+.yd-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.yd-toggle:hover .yd-label {
+  color: var(--ink);
+}
+.yd-chev {
+  display: inline-block;
+  width: 16px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
 .assum-toggles {
   display: flex;
   flex-direction: column;
