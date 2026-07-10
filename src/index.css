@@ -948,6 +948,20 @@ select.select {
   color: var(--ink-mute);
 }
 
+/* rangée d'événement : une colonne de plus (case à cocher) que .row standard */
+.row-ev {
+  grid-template-columns: auto 40px 1fr auto;
+}
+.ev-check {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.row[data-off] .row-ic,
+.row[data-off] .row-main {
+  opacity: 0.45;
+}
+
 /* lignes dépliables de la modale de composition */
 .yd-toggle {
   cursor: pointer;
@@ -956,7 +970,8 @@ select.select {
 .yd-toggle:hover .yd-label {
   color: var(--ink);
 }
-.yd-toggle .yd-label {
+.yd-toggle .yd-label,
+.yd-row .yd-label {
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -964,8 +979,12 @@ select.select {
 .yd-chev {
   flex: none;
   display: inline-flex;
+  width: 12px;
   margin-top: 3px;
   color: var(--ink-faint);
+}
+.yd-chev-ghost {
+  visibility: hidden;
 }
 .yd-chev svg {
   transition: transform 0.15s ease;

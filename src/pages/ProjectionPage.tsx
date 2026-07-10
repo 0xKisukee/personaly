@@ -106,6 +106,8 @@ export default function ProjectionPage() {
     setEvDraft(null);
   };
   const delEvent = (id: string) => update((s) => ({ ...s, events: s.events.filter((x) => x.id !== id) }));
+  const toggleEvent = (id: string) =>
+    update((s) => ({ ...s, events: s.events.map((x) => (x.id === id ? { ...x, disabled: !x.disabled } : x)) }));
   const sortedEvents = [...state.events].sort((a, b) => a.year - b.year);
 
   const now = points[0];
@@ -257,12 +259,16 @@ export default function ProjectionPage() {
             {sortedEvents.length > 0 && (
               <div className="rows">
                 {sortedEvents.map((ev) => (
-                  <div className="row" key={ev.id}>
+                  <div className="row row-ev" key={ev.id} data-off={ev.disabled || undefined}>
+                    <label className="ev-check" title={ev.disabled ? "Réactiver dans la projection" : "Exclure de la projection"}>
+                      <input type="checkbox" checked={!ev.disabled} onChange={() => toggleEvent(ev.id)} />
+                    </label>
                     <div className="row-ic" style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{"⚑"}</div>
                     <div className="row-main">
                       <div className="row-title">{ev.label || "Événement"}</div>
                       <div className="row-meta">
                         <span className="tag">{ev.year}</span> · <span>{eventSummary(ev, state)}</span>
+                        {ev.disabled && <span className="tag" style={{ color: "var(--drain)" }}>désactivé</span>}
                       </div>
                     </div>
                     <div className="row-actions">
@@ -847,7 +853,8 @@ function YdFlow({ label, v, pos, neutral, sub }: { label: string; v: number; pos
   const color = neutral ? "var(--ink-mute)" : pos ? "var(--gain)" : "var(--drain)";
   return (
     <div className="yd-row" style={sub ? { paddingLeft: 22, opacity: 0.75 } : undefined}>
-      <span className="yd-label">{label}</span>
+      {/* les lignes de 1er niveau réservent la place du chevron : tous les libellés s'alignent */}
+      <span className="yd-label">{!sub && <span className="yd-chev yd-chev-ghost" />}{label}</span>
       <span className="mono" style={{ color }}>{signedMoney(v)}</span>
     </div>
   );

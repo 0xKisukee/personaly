@@ -104,6 +104,7 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
   const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4 };
   const plannedByYear = new Map<number, PlannedEvent[]>();
   for (const ev of s.events ?? []) {
+    if (ev.disabled) continue;
     const idx = ev.year - startYear;
     if (idx < 0 || idx > horizon) continue;
     const list = plannedByYear.get(idx) ?? [];

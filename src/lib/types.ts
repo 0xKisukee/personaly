@@ -174,6 +174,7 @@ interface EventBase {
   id: string;
   label: string;
   year: number;
+  disabled?: boolean; // décoché = ignoré par la projection (l'événement reste saisi)
   note?: string;
 }
 

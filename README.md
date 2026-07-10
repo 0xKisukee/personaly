@@ -133,7 +133,9 @@ mensualité calculée), `cash` (rentrée/sortie ponctuelle), `repay` (remboursem
 anticipé). **Les crédits sont indépendants des biens, comme sur la page
 Patrimoine** : un achat financé = `loan` + `buy` la même année ; une vente avec
 crédit en cours = `sell` + `repay`. Ordre d'application dans une année : le cash
-entre d'abord (sell → cash → loan) puis sort (repay → buy).
+entre d'abord (sell → cash → loan) puis sort (repay → buy). Chaque événement a une
+case à cocher (`disabled`) pour l'exclure/réinclure de la projection sans le supprimer
+(comparaison rapide avec/sans un scénario).
 
 **Comptabilité** : tous ces événements sont des transferts **neutres** pour le
 patrimoine net, SAUF les frais (`eventFees`, sortie sèche), l'écart prix de vente
