@@ -17,6 +17,11 @@ export const IconPlus = ({ size }: P) => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+export const IconChevron = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
 export const IconEdit = ({ size }: P) => (
   <svg {...base(size)}>
     <path d="M12 20h9" />

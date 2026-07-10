@@ -956,11 +956,22 @@ select.select {
 .yd-toggle:hover .yd-label {
   color: var(--ink);
 }
+.yd-toggle .yd-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
 .yd-chev {
-  display: inline-block;
-  width: 16px;
+  flex: none;
+  display: inline-flex;
+  margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 11px;
+}
+.yd-chev svg {
+  transition: transform 0.15s ease;
+}
+.yd-chev[data-open] svg {
+  transform: rotate(90deg);
 }
 .assum-toggles {
   display: flex;

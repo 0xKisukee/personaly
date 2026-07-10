@@ -9,7 +9,7 @@ import { money, signedMoney, percent, uid } from "../lib/format";
 import { formatDuration } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
-import { IconChart, IconEdit, IconPlus, IconTrash } from "../components/icons";
+import { IconChart, IconChevron, IconEdit, IconPlus, IconTrash } from "../components/icons";
 
 const HORIZONS = [10, 20, 30, 40];
 
@@ -436,9 +436,11 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
       : draft.kind === "loan" ? draft.amount > 0 && draft.termMonths > 0
       : !!draft.loanId);
 
-  // à l'enregistrement d'un achat : l'actif embarqué hérite du libellé de l'événement
+  // à l'enregistrement d'un achat : l'actif embarqué suit TOUJOURS le libellé de
+  // l'événement (pas de champ séparé dans la modale — un renommage doit se propager
+  // partout : colonne patrimoine, sous-lignes de flux, liste de vente…)
   const handleSave = () =>
-    onSave(draft.kind === "buy" ? { ...draft, asset: { ...draft.asset, label: draft.asset.label || draft.label } } : draft);
+    onSave(draft.kind === "buy" ? { ...draft, asset: { ...draft.asset, label: draft.label } } : draft);
 
   return (
     <Modal
@@ -865,7 +867,10 @@ function YdGroup({ label, v, pos, neutral, subs }: {
       <div className="yd-row yd-toggle" role="button" tabIndex={0}
         onClick={() => setOpen(!open)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setOpen(!open)}>
-        <span className="yd-label"><span className="yd-chev">{open ? "▾" : "▸"}</span>{label}</span>
+        <span className="yd-label">
+          <span className="yd-chev" data-open={open || undefined}><IconChevron size={12} /></span>
+          {label}
+        </span>
         <span className="mono" style={{ color }}>{signedMoney(v)}</span>
       </div>
       {open && subs.map((s) => (
