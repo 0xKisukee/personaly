@@ -101,7 +101,7 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
 
   // événements datés dans l'horizon, groupés par année d'application ; dans une même
   // année, le cash ENTRE d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats)
-  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4 };
+  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
   const plannedByYear = new Map<number, PlannedEvent[]>();
   for (const ev of s.events ?? []) {
     if (ev.disabled) continue;
@@ -130,16 +130,18 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     }
   }
 
-  // cascade du surplus : actifs cibles ordonnés (existants, éligibles, sans doublon),
-  // chacun avec sa capacité de versement restante (plafond − versements déjà effectués)
+  // capacité de versement restante PAR ACTIF (plafond − versements déjà effectués) —
+  // partagée entre la cascade du surplus et les événements "deposit"
+  const capLeftByAsset = assets.map((A) =>
+    A.a.depositCap != null ? Math.max(0, A.a.depositCap - (A.a.depositsMade || 0)) : Infinity
+  );
+
+  // cascade du surplus : actifs cibles ordonnés (existants, éligibles, sans doublon)
   const targetIdxs: number[] = [];
-  const capLefts: number[] = [];
   for (const id of surplusTargets ?? []) {
     const k = assets.findIndex((x) => x.id === id && canReceiveDeposits(x.a));
     if (k < 0 || targetIdxs.includes(k)) continue;
     targetIdxs.push(k);
-    const t = assets[k].a;
-    capLefts.push(t.depositCap != null ? Math.max(0, t.depositCap - (t.depositsMade || 0)) : Infinity);
   }
 
   const yieldM = monthlyRate(savingsYield);
@@ -165,6 +167,17 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     const startVals = assets.map((A) => A.val);
     const startBals = loans.map((L) => Math.max(0, L.balance));
     const startActive = assets.map((A) => A.active);
+
+    // accumulateurs de flux de l'année (déclarés avant les événements : un
+    // versement ponctuel alimente aDep/yDep comme la cascade)
+    const aInc = new Array(assets.length).fill(0);
+    const aChg = new Array(assets.length).fill(0);
+    const aGro = new Array(assets.length).fill(0);
+    const aDep = new Array(assets.length).fill(0);
+    const lInt = new Array(loans.length).fill(0);
+    const lPri = new Array(loans.length).fill(0);
+    const lIns = new Array(loans.length).fill(0);
+    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0, yDep = 0;
 
     // ---- ÉVÉNEMENTS de l'année : appliqués APRÈS l'instantané (ils font partie
     // des flux de l'année) et AVANT le 1er mois. Transferts neutres pour le
@@ -220,6 +233,23 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
         cash = -((ev.price || 0) + fees);
         savings += cash;
         evFees += fees;
+      } else if (ev.kind === "deposit") {
+        const k = assets.findIndex((x) => x.id === ev.assetId);
+        if (k < 0 || !assets[k].active || !canReceiveDeposits(assets[k].a)) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : actif introuvable, vendu ou inéligible aux versements` });
+          continue;
+        }
+        // transfert neutre épargne → actif, dans la limite du plafond de versements
+        const amt = Math.min(ev.amount || 0, capLeftByAsset[k]);
+        if (amt < (ev.amount || 0) - EPS) {
+          warnings.push({ year, label: `« ${ev.label} » plafonné : ${Math.round(amt)} € versés (plafond de versements atteint)` });
+        }
+        capLeftByAsset[k] -= amt;
+        assets[k].val += amt;
+        aDep[k] += amt;
+        yDep += amt;
+        cash = -amt;
+        savings += cash;
       }
       evDetails.push({ id: ev.id, label: ev.label || ev.kind, kind: ev.kind, cash, fees, gain });
       events.push({ yearIndex: i, year, label: ev.label || ev.kind, kind: "planned" });
@@ -228,23 +258,12 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       }
     }
 
-    // accumulateurs de flux de l'année
-    const aInc = new Array(assets.length).fill(0);
-    const aChg = new Array(assets.length).fill(0);
-    const aGro = new Array(assets.length).fill(0);
-    const aDep = new Array(assets.length).fill(0);
-    const lInt = new Array(loans.length).fill(0);
-    const lPri = new Array(loans.length).fill(0);
-    const lIns = new Array(loans.length).fill(0);
-
     const incFactor = (it: { growth?: number }) => flowFactor(it.growth, indexIncomes, i);
     const expFactor = (it: { growth?: number }) => flowFactor(it.growth, indexExpenses, i);
     const incMonthly = s.incomes.map((it) => (isActiveYear(it.startYear, it.endYear, year) ? toMonthly(it) * incFactor(it) : 0));
     const expMonthly = s.expenses.map((it) => (isActiveYear(it.startYear, it.endYear, year) ? toMonthly(it) * expFactor(it) : 0));
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
-
-    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0, yDep = 0;
 
     // 1re année : uniquement les mois restants de l'année civile en cours
     const months = i === 0 ? 12 - startMonth : 12;
@@ -304,10 +323,11 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       if (net > 0) {
         let rest = net;
         for (let t = 0; t < targetIdxs.length && rest > 0; t++) {
-          if (!assets[targetIdxs[t]].active) continue;
-          const d = Math.min(rest, capLefts[t]);
+          const k = targetIdxs[t];
+          if (!assets[k].active) continue;
+          const d = Math.min(rest, capLeftByAsset[k]);
           if (d <= 0) continue;
-          capLefts[t] -= d; rest -= d;
+          capLeftByAsset[k] -= d; rest -= d;
           monthDeps[t] += d; depTotal += d;
         }
       }

@@ -36,11 +36,12 @@ function switchKind(ev: PlannedEvent, kind: PlannedEvent["kind"], s: AppStateLik
     case "sell": return { ...base, kind, assetId: sellableAssets(s)[0]?.id ?? "", feesPct: 0 };
     case "loan": return { ...base, kind, amount: 0, rate: 0, termMonths: 240 };
     case "repay": return { ...base, kind, loanId: repayableLoans(s)[0]?.id ?? "" };
+    case "deposit": return { ...base, kind, assetId: depositableAssets(s)[0]?.id ?? "", amount: 0 };
   }
 }
 
 interface AppStateLike {
-  assets: { id: string; label: string }[];
+  assets: { id: string; label: string; category: AssetCategory }[];
   liabilities: { id: string; label: string }[];
   events: PlannedEvent[];
 }
@@ -61,6 +62,17 @@ function repayableLoans(s: AppStateLike): { id: string; label: string }[] {
   ];
 }
 
+/** Actifs pouvant recevoir un versement : éligibles (compte, livret, placement), existants ou achetés par événement. */
+function depositableAssets(s: AppStateLike): { id: string; label: string }[] {
+  return [
+    ...s.assets.filter((a) => canReceiveDeposits(a)).map((a) => ({ id: a.id, label: a.label || "Actif" })),
+    ...s.events
+      .filter((e) => e.kind === "buy")
+      .filter((e) => canReceiveDeposits(e.asset))
+      .map((e) => ({ id: e.asset.id, label: `${e.label || "Achat"} (${e.year})` })),
+  ];
+}
+
 function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
   switch (ev.kind) {
     case "buy":
@@ -76,6 +88,10 @@ function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
     case "repay": {
       const label = repayableLoans(s).find((l) => l.id === ev.loanId)?.label ?? "emprunt inconnu";
       return `Remboursement anticipé de ${label} · ${ev.amount != null ? money(ev.amount) : "totalité"}`;
+    }
+    case "deposit": {
+      const label = depositableAssets(s).find((a) => a.id === ev.assetId)?.label ?? "actif inconnu";
+      return `Versement · ${money(ev.amount)} → ${label}`;
     }
   }
 }
@@ -421,6 +437,7 @@ const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
   { id: "sell", label: "Vente" },
   { id: "loan", label: "Emprunt" },
   { id: "repay", label: "Remboursement" },
+  { id: "deposit", label: "Versement" },
 ];
 
 function EventModal({ draft, s, onChange, onSave, onClose }: {
@@ -440,6 +457,7 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
       : draft.kind === "buy" ? draft.price > 0
       : draft.kind === "sell" ? !!draft.assetId
       : draft.kind === "loan" ? draft.amount > 0 && draft.termMonths > 0
+      : draft.kind === "deposit" ? !!draft.assetId && draft.amount > 0
       : !!draft.loanId);
 
   // à l'enregistrement d'un achat : l'actif embarqué suit TOUJOURS le libellé de
@@ -596,6 +614,27 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
             <span className="help span-2">
               Le capital arrive en <b>épargne</b> à la date ; la mensualité se calcule seule et l'emprunt
               s'amortit jusqu'à son terme{draft.termMonths ? ` (fin ${draft.year + Math.round(draft.termMonths / 12)})` : ""}.
+            </span>
+          </>
+        )}
+
+        {draft.kind === "deposit" && (
+          <>
+            <div className="field">
+              <label>Actif destinataire</label>
+              <select className="select" value={draft.assetId} onChange={(e) => set({ assetId: e.target.value })}>
+                {depositableAssets(s).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Montant (€)</label>
+              <input className="input mono" type="number" placeholder="ex. 10 000"
+                value={draft.amount || ""} onChange={(e) => set({ amount: Number(e.target.value) })} />
+            </div>
+            <span className="help span-2">
+              Transfert <b>neutre</b> de l'épargne vers l'actif à la date (il compose ensuite au taux de l'actif).
+              Le <b>plafond de versements</b> est respecté — la capacité est partagée avec la cascade du surplus.
+              Seuls les comptes, livrets et placements sont éligibles.
             </span>
           </>
         )}
@@ -819,7 +858,7 @@ function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boo
               subs={d.loans.filter((l) => l.principal > 0).map((l) => ({ id: l.id, label: l.label, v: -l.principal }))} />
           )}
           {point.deposited > 0 && (
-            <YdGroup label="Surplus investi (transfert neutre)" v={point.deposited} neutral
+            <YdGroup label="Versé dans les actifs (transfert neutre)" v={point.deposited} neutral
               subs={d.assets.filter((a) => a.deposit > 0).map((a) => ({ id: a.id, label: a.label, v: a.deposit }))} />
           )}
           {point.eventCash !== 0 && (

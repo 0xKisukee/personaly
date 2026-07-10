@@ -125,12 +125,14 @@ valeur : la croissance peut le dépasser, seuls les versements s'arrêtent.
 
 ### PlannedEvent — événements datés, ATOMIQUES et COMPOSABLES
 
-Cinq types (`kind`), datés à l'**année** (appliqués au 1er mois, avant les flux) :
+Six types (`kind`), datés à l'**année** (appliqués au 1er mois, avant les flux) :
 `buy` (achat d'actif payé cash, avec `fees` sortie sèche — l'actif embarqué est un
 `Asset` complet : croissance, revenu, charges…), `sell` (produit → épargne ; prix
 fixé optionnel, sinon valeur projetée), `loan` (nouvel emprunt : capital → épargne,
 mensualité calculée), `cash` (rentrée/sortie ponctuelle), `repay` (remboursement
-anticipé). **Les crédits sont indépendants des biens, comme sur la page
+anticipé), `deposit` (versement épargne → actif éligible, transfert neutre — la
+capacité de plafond est PARTAGÉE avec la cascade du surplus, `capLeftByAsset`).
+**Les crédits sont indépendants des biens, comme sur la page
 Patrimoine** : un achat financé = `loan` + `buy` la même année ; une vente avec
 crédit en cours = `sell` + `repay`. Ordre d'application dans une année : le cash
 entre d'abord (sell → cash → loan) puis sort (repay → buy). Chaque événement a une

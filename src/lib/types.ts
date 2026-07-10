@@ -216,7 +216,18 @@ export interface RepayLoanEvent extends EventBase {
   amount?: number; // partiel ; absent = solde total à la date
 }
 
-export type PlannedEvent = BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent;
+/**
+ * Versement ponctuel : de l'épargne vers un actif ÉLIGIBLE (canReceiveDeposits).
+ * Transfert neutre. Respecte le plafond de versements de l'actif — la capacité
+ * est PARTAGÉE avec la cascade du surplus (un versement la consomme d'autant).
+ */
+export interface DepositEvent extends EventBase {
+  kind: "deposit";
+  assetId: string; // actif existant ou créé par un événement "buy"
+  amount: number;
+}
+
+export type PlannedEvent = BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent | DepositEvent;
 
 /* --------------------------- PROJECTION --------------------------- */
 
