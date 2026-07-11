@@ -6,8 +6,11 @@ import type {
   ExpenseItem,
   IncomeCategory,
   IncomeItem,
+  Milestone,
+  MilestoneRef,
   Period,
 } from "../lib/types";
+import { flowBounds } from "../lib/types";
 import {
   assetChargesYearly,
   assetYearlyGrowth,
@@ -27,11 +30,12 @@ import {
   realizedEnrichmentYearly,
 } from "../lib/selectors";
 import { loanYearSplit } from "../lib/finance";
-import { money, signedMoney, toYearly, uid, isActiveYear } from "../lib/format";
+import { money, signedMoney, toYearly, uid, isActiveYear, whenLabel } from "../lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import WhenPicker from "../components/WhenPicker";
 import {
   IconArrowUp,
   IconBox,
@@ -85,15 +89,23 @@ const Liq = ({ kind }: { kind: "encaisse" | "latent" }) => (
   <span className={"liq liq-" + kind}>{kind === "encaisse" ? "encaissé" : "latent"}</span>
 );
 
-function Bounds({ s, e }: { s?: number; e?: number }) {
-  if (!s && !e) return null;
-  const active = isActiveYear(s, e, CURRENT_YEAR);
-  const txt = [s ? `dès ${s}` : "", e ? `→ ${e}` : ""].filter(Boolean).join(" ");
+/** Bornes d'un flux : ancrages jalon résolus, libellés « dès Retraite (2057) ». */
+function Bounds({ item, milestones }: {
+  item: { startYear?: number; endYear?: number; startRef?: MilestoneRef; endRef?: MilestoneRef };
+  milestones: Milestone[];
+}) {
+  const sTxt = whenLabel(item.startYear, item.startRef, milestones);
+  const eTxt = whenLabel(item.endYear, item.endRef, milestones);
+  if (!sTxt && !eTxt) return null;
+  const { start, end } = flowBounds(item, milestones);
+  const active = isActiveYear(start, end, CURRENT_YEAR);
+  const txt = [sTxt ? `dès ${sTxt}` : "", eTxt ? `→ ${eTxt}` : ""].filter(Boolean).join(" ");
   return <span className="tag" style={{ color: active ? "var(--ink-mute)" : "var(--drain)" }}>{active ? txt : `${txt} · inactif`}</span>;
 }
 
 export default function FluxPage() {
-  const { state, update } = useStore();
+  // `plan` : uniquement pour résoudre les ancrages jalon des flux (jalons du plan actif)
+  const { state, plan, update } = useStore();
   const [view, setView] = useState<Period>("yearly");
   const [incomeDraft, setIncomeDraft] = useState<IncomeItem | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseItem | null>(null);
@@ -269,13 +281,14 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.incomes.map((it, i) => {
               const Meta = INCOME_META[it.category];
-              const active = isActiveYear(it.startYear, it.endYear, CURRENT_YEAR);
+              const b = flowBounds(it, plan.milestones);
+              const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
                 <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic" style={{ color: "var(--gain)" }}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds s={it.startYear} e={it.endYear} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
                   </div>
                   <div className="row-val" style={{ color: "var(--gain)" }}>{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -342,13 +355,14 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.expenses.map((it, i) => {
               const Meta = EXPENSE_META[it.category];
-              const active = isActiveYear(it.startYear, it.endYear, CURRENT_YEAR);
+              const b = flowBounds(it, plan.milestones);
+              const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
                 <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic" style={{ color: it.category === "impot" ? "var(--brass)" : "var(--drain)" }}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds s={it.startYear} e={it.endYear} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
                   </div>
                   <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -456,6 +470,7 @@ export default function FluxPage() {
           kind="income"
           draft={incomeDraft}
           categories={INCOME_META}
+          milestones={plan.milestones}
           onChange={(d) => setIncomeDraft(d as IncomeItem)}
           onSave={() => saveIncome(incomeDraft)}
           onClose={() => setIncomeDraft(null)}
@@ -466,6 +481,7 @@ export default function FluxPage() {
           kind="expense"
           draft={expenseDraft}
           categories={EXPENSE_META}
+          milestones={plan.milestones}
           onChange={(d) => setExpenseDraft(d as ExpenseItem)}
           onSave={() => saveExpense(expenseDraft)}
           onClose={() => setExpenseDraft(null)}
@@ -484,6 +500,8 @@ interface FlowDraft {
   period: Period;
   startYear?: number;
   endYear?: number;
+  startRef?: MilestoneRef;
+  endRef?: MilestoneRef;
   growth?: number;
 }
 
@@ -491,6 +509,7 @@ function FlowModal({
   kind,
   draft,
   categories,
+  milestones,
   onChange,
   onSave,
   onClose,
@@ -498,6 +517,7 @@ function FlowModal({
   kind: "income" | "expense";
   draft: FlowDraft;
   categories: Record<string, { label: string; icon: IconC }>;
+  milestones: Milestone[];
   onChange: (d: FlowDraft) => void;
   onSave: () => void;
   onClose: () => void;
@@ -555,24 +575,24 @@ function FlowModal({
             <button data-on={draft.period === "yearly"} onClick={() => set({ period: "yearly" })}>Annuel</button>
           </div>
         </div>
-        <div className="field">
-          <label>À partir de (année)</label>
-          <input
-            className="input mono"
-            type="number"
-            placeholder={`${CURRENT_YEAR} (dès maintenant)`}
-            value={draft.startYear ?? ""}
-            onChange={(e) => set({ startYear: e.target.value ? Number(e.target.value) : undefined })}
+        <div className="field span-2">
+          <label>À partir de</label>
+          <WhenPicker
+            milestones={milestones}
+            allowEmpty
+            emptyLabel="Dès maintenant"
+            value={{ year: draft.startYear, ref: draft.startRef }}
+            onChange={(v) => set({ startYear: v.year, startRef: v.ref })}
           />
         </div>
-        <div className="field">
-          <label>Jusqu'à (année)</label>
-          <input
-            className="input mono"
-            type="number"
-            placeholder="sans fin"
-            value={draft.endYear ?? ""}
-            onChange={(e) => set({ endYear: e.target.value ? Number(e.target.value) : undefined })}
+        <div className="field span-2">
+          <label>Jusqu'à</label>
+          <WhenPicker
+            milestones={milestones}
+            allowEmpty
+            emptyLabel="Sans fin"
+            value={{ year: draft.endYear, ref: draft.endRef }}
+            onChange={(v) => set({ endYear: v.year, endRef: v.ref })}
           />
         </div>
         <div className="field span-2">
@@ -588,8 +608,9 @@ function FlowModal({
         </div>
       </div>
       <p className="help" style={{ marginTop: 14 }}>
-        Dates : laisse vide pour un flux permanent (salaire qui s'arrête, pension qui démarre, dépense temporaire).
-        Revalorisation : taux propre au flux dans la projection (ex. salaire +2 %/an) ; vide = suit l'inflation globale.
+        Dates : « Dès maintenant » / « Sans fin » pour un flux permanent. Ancre une borne sur un <b>jalon</b>
+        (ex. salaire jusqu'à <b>Retraite</b>) : déplacer le jalon dans <b>Profil</b> recale le flux automatiquement.
+        Revalorisation : taux propre au flux dans la projection ; vide = suit l'inflation globale.
       </p>
 
       <div className="modal-foot">

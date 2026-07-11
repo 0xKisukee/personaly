@@ -17,6 +17,55 @@ export interface Profile {
   birthDate: string; // ISO "YYYY-MM-DD"
 }
 
+/* ----------------------------- JALONS ----------------------------- */
+
+/**
+ * Jalon de vie (Retraite, Départ des enfants…) : une année NOMMÉE.
+ * Les flux et événements peuvent s'ANCRER dessus (MilestoneRef) au lieu d'une
+ * année en dur : déplacer le jalon recale toute la projection d'un coup.
+ */
+export interface Milestone {
+  id: string;
+  label: string;
+  year: number;
+}
+
+/** Ancrage relatif : « au jalon X », éventuellement décalé de ± n années. */
+export interface MilestoneRef {
+  milestoneId: string;
+  offset?: number; // années après (+) / avant (−) le jalon
+}
+
+/** Année d'un ancrage, ou null si le jalon a été supprimé (référence orpheline). */
+export function refYear(ref: MilestoneRef | undefined, milestones: Milestone[]): number | null {
+  if (!ref) return null;
+  const m = milestones.find((x) => x.id === ref.milestoneId);
+  return m ? m.year + (ref.offset ?? 0) : null;
+}
+
+/**
+ * Année effective d'un événement : l'ancrage jalon PRIME s'il se résout ;
+ * sinon on retombe sur `year`, instantané pris au dernier enregistrement
+ * (rien ne casse : on retombe sur l'instantané et on signale).
+ */
+export function eventYear(
+  ev: { year: number; when?: MilestoneRef },
+  milestones: Milestone[]
+): number {
+  return refYear(ev.when, milestones) ?? ev.year;
+}
+
+/** Bornes effectives d'un flux : ancrages jalon prioritaires, sinon années en dur. */
+export function flowBounds(
+  f: { startYear?: number; endYear?: number; startRef?: MilestoneRef; endRef?: MilestoneRef },
+  milestones: Milestone[]
+): { start?: number; end?: number } {
+  return {
+    start: refYear(f.startRef, milestones) ?? f.startYear,
+    end: refYear(f.endRef, milestones) ?? f.endYear,
+  };
+}
+
 /* --------------------------- PATRIMOINE --------------------------- */
 
 export type AssetCategory =
@@ -59,6 +108,9 @@ export interface Asset {
 
   // 1. croissance capitalisée (se compose) — + apprécie / - déprécie / 0 stable
   growthRate: number; // %/an
+  // volatilité annuelle (écart-type, %/an) — utilisée UNIQUEMENT par le Monte
+  // Carlo : la projection déterministe garde growthRate sec. 0/absent = certain.
+  volatility?: number;
 
   // 2. revenu distribué (flux entrant, ne se compose pas)
   incomeMode: "none" | "rate" | "amount";
@@ -130,6 +182,10 @@ export type ExpenseCategory = "vie_courante" | "logement" | "impot" | "loisir" |
  * d'activité du flux. Vides = actif dès aujourd'hui et sans fin.
  * Ex. salaire qui s'arrête à la retraite (endYear), pension qui démarre (startYear).
  */
+/**
+ * `startRef` / `endRef` : ancrage sur un JALON (prioritaire). `startYear` /
+ * `endYear` restent l'instantané de secours si le jalon est supprimé.
+ */
 export interface IncomeItem {
   id: string;
   label: string;
@@ -138,6 +194,8 @@ export interface IncomeItem {
   period: Period;
   startYear?: number;
   endYear?: number;
+  startRef?: MilestoneRef;
+  endRef?: MilestoneRef;
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
 
@@ -149,6 +207,8 @@ export interface ExpenseItem {
   period: Period;
   startYear?: number;
   endYear?: number;
+  startRef?: MilestoneRef;
+  endRef?: MilestoneRef;
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
 
@@ -173,7 +233,8 @@ export interface ExpenseItem {
 interface EventBase {
   id: string;
   label: string;
-  year: number;
+  year: number; // instantané de secours si `when` est orphelin (jalon supprimé)
+  when?: MilestoneRef; // ancrage jalon — PRIME sur `year` quand il se résout
   disabled?: boolean; // décoché = ignoré par la projection (l'événement reste saisi)
   note?: string;
 }
@@ -243,6 +304,11 @@ export interface ProjectionParams {
   // plafond de versements, l'excédent passe au suivant, et ce qui reste va à
   // l'épargne (taux savingsYield). Vide/absent = tout à l'épargne.
   surplusTargets?: string[];
+  // Cascade de RETRAIT (miroir du surplus) : quand l'épargne devient négative,
+  // on puise dans ces actifs dans l'ordre (transfert neutre actif → épargne)
+  // avant de laisser le déficit en épargne. Vide/absent = comportement actuel
+  // (les déficits restent portés par l'épargne, qui peut passer en négatif).
+  withdrawalTargets?: string[];
   fiTarget?: number; // patrimoine net à atteindre pour l'indépendance financière (défini par l'utilisateur, pas déduit par le moteur)
 }
 
@@ -255,16 +321,45 @@ export const DEFAULT_PROJECTION: ProjectionParams = {
   realTerms: false,
 };
 
+/* ------------------------------- PLANS ----------------------------- */
+
+/**
+ * Un PLAN est une simulation virtuelle posée SUR les finances courantes
+ * (jamais modifiées par lui) : ses jalons, ses événements et ses hypothèses.
+ * Créer un plan = dupliquer le plan actif (jalons copiés avec les MÊMES ids :
+ * les ancrages des flux se résolvent dans chaque plan). Pour un « et si »
+ * ponctuel, désactive un événement ou duplique le plan.
+ */
+export interface Plan {
+  id: string;
+  name: string;
+  milestones: Milestone[];
+  events: PlannedEvent[];
+  projection: ProjectionParams;
+}
+
+export const DEFAULT_PLAN: Plan = {
+  id: "plan-1",
+  name: "Plan principal",
+  milestones: [],
+  events: [],
+  projection: DEFAULT_PROJECTION,
+};
+
 /* ------------------------------ STATE ----------------------------- */
 
+/**
+ * État de l'app : les FINANCES COURANTES (profil, actifs, passifs, flux — la
+ * réalité d'aujourd'hui, source de vérité unique) + des PLANS de simulation.
+ */
 export interface AppState {
   profile: Profile;
   assets: Asset[];
   liabilities: Liability[];
   incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
   expenses: ExpenseItem[]; // dépenses & impôts
-  events: PlannedEvent[]; // événements datés (achat/vente d'actif, rentrée/sortie, remboursement)
-  projection: ProjectionParams;
+  plans: Plan[];
+  activePlanId: string;
 }
 
 export const EMPTY_STATE: AppState = {
@@ -273,6 +368,36 @@ export const EMPTY_STATE: AppState = {
   liabilities: [],
   incomes: [],
   expenses: [],
-  events: [],
-  projection: DEFAULT_PROJECTION,
+  plans: [DEFAULT_PLAN],
+  activePlanId: DEFAULT_PLAN.id,
 };
+
+/* --------------------------- SIMULATION --------------------------- */
+
+/**
+ * Entrée du moteur de projection : finances courantes + couche du plan
+ * (jalons, événements). Le moteur ne connaît pas les plans — il reçoit un
+ * instantané composé.
+ */
+export interface SimState {
+  profile: Profile;
+  milestones: Milestone[];
+  assets: Asset[];
+  liabilities: Liability[];
+  incomes: IncomeItem[];
+  expenses: ExpenseItem[];
+  events: PlannedEvent[];
+}
+
+/** Compose l'entrée du moteur pour un plan. */
+export function simInput(s: AppState, plan: Plan): SimState {
+  return {
+    profile: s.profile,
+    assets: s.assets,
+    liabilities: s.liabilities,
+    incomes: s.incomes,
+    expenses: s.expenses,
+    milestones: plan.milestones,
+    events: plan.events,
+  };
+}

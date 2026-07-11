@@ -6,7 +6,7 @@
    Un bloc dédié teste le départ en cours d'année.
    =========================================================================== */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import type { AppState, Asset, Liability, PlannedEvent, ProjectionParams } from "./types";
+import type { Asset, Liability, PlannedEvent, ProjectionParams, SimState } from "./types";
 import { DEFAULT_PROJECTION } from "./types";
 import { project, type ProjectionResult, type YearPoint } from "./projection";
 import { monthlyPayment } from "./finance";
@@ -27,10 +27,10 @@ const asset = (over: Partial<Asset>): Asset => ({
 const loan = (over: Partial<Liability>): Liability => ({
   id: "l", label: "Prêt", category: "emprunt_immo", outstanding: 0, ...over,
 });
-const state = (over: Partial<AppState>): AppState => ({
+const state = (over: Partial<SimState>): SimState => ({
   profile: { firstName: "T", birthDate: "1995-05-01" },
-  assets: [], liabilities: [], incomes: [], expenses: [], events: [],
-  projection: DEFAULT_PROJECTION, ...over,
+  milestones: [], assets: [], liabilities: [], incomes: [], expenses: [], events: [],
+  ...over,
 });
 const params = (over: Partial<ProjectionParams> = {}): ProjectionParams => ({
   ...DEFAULT_PROJECTION, horizon: 10, inflation: 0, savingsYield: 0,
@@ -62,6 +62,7 @@ function checkInvariants(r: ProjectionResult) {
     expect(pt.detail.assets.reduce((t, a) => t + a.income, 0), `Σ income ${pt.year}`).toBeCloseTo(pt.distributed, 4);
     expect(pt.detail.assets.reduce((t, a) => t + a.charges, 0), `Σ charges ${pt.year}`).toBeCloseTo(pt.charges, 4);
     expect(pt.detail.assets.reduce((t, a) => t + a.deposit, 0), `Σ deposit ${pt.year}`).toBeCloseTo(pt.deposited, 4);
+    expect(pt.detail.assets.reduce((t, a) => t + a.withdrawal, 0), `Σ withdrawal ${pt.year}`).toBeCloseTo(pt.withdrawn, 4);
     expect(pt.detail.loans.reduce((t, l) => t + l.interest, 0), `Σ interest ${pt.year}`).toBeCloseTo(pt.interest, 4);
     expect(pt.detail.loans.reduce((t, l) => t + l.principal, 0), `Σ principal ${pt.year}`).toBeCloseTo(pt.principal, 4);
     expect(pt.detail.incomes.reduce((t, f) => t + f.amount, 0), `Σ incomes ${pt.year}`).toBeCloseTo(pt.extra, 4);
@@ -612,6 +613,119 @@ describe("départ en cours d'année", () => {
   });
 });
 
+/* ------------------------------- jalons ------------------------------- */
+
+describe("jalons (dates relatives)", () => {
+  const retraite = { id: "ret", label: "Retraite", year: Y + 5 };
+
+  it("un événement ancré suit le jalon quand il bouge (l'instantané year est ignoré)", () => {
+    const mk = (msYear: number) =>
+      project(state({
+        milestones: [{ ...retraite, year: msYear }],
+        events: [{ id: "e", kind: "cash", label: "Prime départ", year: Y + 1, amount: 10_000, when: { milestoneId: "ret" } }],
+      }), params({ horizon: 10 }));
+    expect(mk(Y + 5).points[5].eventCash).toBe(10_000);
+    expect(mk(Y + 8).points[8].eventCash).toBe(10_000);
+    expect(mk(Y + 8).points[1].eventCash).toBe(0); // l'instantané Y+1 n'est PAS utilisé
+  });
+
+  it("offset : « 2 ans après la retraite »", () => {
+    const s = state({
+      milestones: [retraite],
+      events: [{ id: "e", kind: "cash", label: "Voyage", year: Y, amount: -5_000, when: { milestoneId: "ret", offset: 2 } }],
+    });
+    const r = project(s, params({ horizon: 10 }));
+    expect(r.points[7].eventCash).toBe(-5_000);
+  });
+
+  it("flux borné par jalons : salaire jusqu'à la retraite, pension ensuite", () => {
+    const s = state({
+      milestones: [retraite],
+      incomes: [
+        { id: "sal", label: "Salaire", category: "salaire", amount: 1_000, period: "monthly", endRef: { milestoneId: "ret" } },
+        { id: "pen", label: "Pension", category: "rente", amount: 600, period: "monthly", startRef: { milestoneId: "ret", offset: 1 } },
+      ],
+    });
+    const r = project(s, params({ horizon: 8 }));
+    expect(r.points[5].extra).toBeCloseTo(12_000, 6); // dernière année de salaire (borne inclusive)
+    expect(r.points[6].extra).toBeCloseTo(7_200, 6); // pension seule
+    checkInvariants(r);
+  });
+
+  it("jalon supprimé : retombe sur l'année instantané + warning (rien ne casse)", () => {
+    const s = state({
+      events: [{ id: "e", kind: "cash", label: "Prime", year: Y + 2, amount: 10_000, when: { milestoneId: "fantôme" } }],
+    });
+    const r = project(s, params({ horizon: 5 }));
+    expect(r.points[2].eventCash).toBe(10_000);
+    expect(r.warnings.some((w) => w.label.includes("jalon supprimé"))).toBe(true);
+  });
+});
+
+/* ------------------------- cascade de retrait ------------------------- */
+
+describe("cascade de retrait (décumulation)", () => {
+  const base = state({
+    assets: [
+      asset({ id: "liv", label: "Livret", category: "livret_epargne", value: 5_000 }),
+      asset({ id: "pea", label: "PEA", category: "placement", value: 50_000 }),
+    ],
+    expenses: [{ id: "e", label: "Vie", category: "vie_courante", amount: 1_000, period: "monthly" }],
+  });
+
+  it("puise dans l'ordre : le livret d'abord, puis le PEA ; l'épargne ne devient pas négative", () => {
+    const r = project(base, params({ horizon: 3, withdrawalTargets: ["liv", "pea"] }));
+    // an 1 : 12 000 de déficit → 5 000 du livret + 7 000 du PEA
+    expect(r.points[0].withdrawn).toBeCloseTo(12_000, 4);
+    expect(r.points[1].detail.assets.find((a) => a.id === "liv")!.value).toBeCloseTo(0, 4);
+    expect(r.points[1].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(43_000, 4);
+    expect(r.points.every((pt) => pt.savings >= -0.01)).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("le retrait est NEUTRE pour le patrimoine net (mêmes trajectoires qu'en déficit porté)", () => {
+    const avec = project(base, params({ horizon: 3, withdrawalTargets: ["liv", "pea"] }));
+    const sans = project(base, params({ horizon: 3 }));
+    avec.points.forEach((pt, i) => expect(pt.netWorth).toBeCloseTo(sans.points[i].netWorth, 4));
+  });
+
+  it("actifs épuisés : le déficit restant retombe en épargne négative", () => {
+    const r = project(base, params({ horizon: 6, withdrawalTargets: ["liv", "pea"] }));
+    // 55 000 de liquide pour 12 000/an : à sec pendant la 5e année
+    expect(last(r).savings).toBeLessThan(0);
+    expect(r.points.reduce((t, pt) => t + pt.withdrawn, 0)).toBeCloseTo(55_000, 2);
+    checkInvariants(r);
+  });
+
+  it("un événement à sortie de cash est couvert par la cascade (pas d'alerte si ça suffit)", () => {
+    const s = state({
+      assets: [asset({ id: "pea", value: 100_000 })],
+      events: [{ id: "b", kind: "cash", label: "Travaux", year: Y + 1, amount: -30_000 }],
+    });
+    const r = project(s, params({ horizon: 3, withdrawalTargets: ["pea"] }));
+    expect(r.warnings).toHaveLength(0);
+    expect(r.points[1].withdrawn).toBeCloseTo(30_000, 4);
+    expect(r.points[2].detail.assets[0].value).toBeCloseTo(70_000, 4);
+    checkInvariants(r);
+  });
+
+  it("ids inconnus ou inéligibles (immobilier) : ignorés sans erreur", () => {
+    const s = state({
+      assets: [asset({ id: "h", category: "immobilier", value: 100_000 })],
+      expenses: [{ id: "e", label: "Vie", category: "vie_courante", amount: 500, period: "monthly" }],
+    });
+    const r = project(s, params({ horizon: 2, withdrawalTargets: ["fantôme", "h"] }));
+    expect(r.points.every((pt) => pt.withdrawn === 0)).toBe(true);
+    expect(last(r).savings).toBeCloseTo(-12_000, 4);
+  });
+
+  it("sans cascade configurée : comportement historique inchangé (déficit en épargne)", () => {
+    const r = project(base, params({ horizon: 2 }));
+    expect(r.points.every((pt) => pt.withdrawn === 0)).toBe(true);
+    expect(last(r).savings).toBeCloseTo(-24_000, 4);
+  });
+});
+
 /* --------------------------- scénario complet --------------------------- */
 
 describe("scénario complet (kitchen sink) : les invariants tiennent partout", () => {
@@ -649,7 +763,6 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
         { id: "rpay", kind: "repay", label: "Solde conso", year: Y + 2, loanId: "l-conso" },
         { id: "off", kind: "cash", label: "Désactivé", year: Y + 3, amount: 999_999, disabled: true },
       ],
-      projection: DEFAULT_PROJECTION,
     });
     const p = params({
       horizon: 25, inflation: 2, indexIncomes: true, indexExpenses: true,

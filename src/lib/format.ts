@@ -1,4 +1,4 @@
-import type { MoneyFlow, Period } from "./types";
+import type { Milestone, MilestoneRef, MoneyFlow, Period } from "./types";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -69,6 +69,28 @@ export function isActiveYear(
   if (startYear && year < startYear) return false;
   if (endYear && year > endYear) return false;
   return true;
+}
+
+/**
+ * Libellé humain d'une date ancrée : « Retraite (2057) », « Retraite +2 (2059) »,
+ * « 2032 » si année en dur, « 2032 (jalon supprimé) » si l'ancrage est orphelin.
+ * null si rien n'est défini (flux sans borne).
+ */
+export function whenLabel(
+  year: number | undefined,
+  ref: MilestoneRef | undefined,
+  milestones: Milestone[]
+): string | null {
+  if (ref) {
+    const m = milestones.find((x) => x.id === ref.milestoneId);
+    if (m) {
+      const off = ref.offset ?? 0;
+      const suffix = off ? ` ${off > 0 ? "+" : "−"}${Math.abs(off)}` : "";
+      return `${m.label}${suffix} (${m.year + off})`;
+    }
+    return year != null ? `${year} (jalon supprimé)` : "jalon supprimé";
+  }
+  return year != null ? String(year) : null;
 }
 
 export function uid(): string {

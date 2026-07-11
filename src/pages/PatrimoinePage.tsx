@@ -377,6 +377,21 @@ function AssetModal({
               Le gain reste dans l'actif et <b>se compose</b> dans la projection. Négatif pour un bien qui se déprécie.
             </span>
           </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Volatilité (%/an) — optionnel</label>
+            <input
+              className="input mono"
+              type="number"
+              step="0.5"
+              placeholder="ex. 15 actions · 8 immo · 0 livret"
+              value={draft.volatility ?? ""}
+              onChange={(e) => set({ volatility: e.target.value ? Number(e.target.value) : undefined })}
+            />
+            <span className="help">
+              Écart-type annuel du rendement, utilisé par la <b>Probabilité de succès</b> (Monte Carlo).
+              La projection déterministe n'en tient pas compte. Vide = rendement certain.
+            </span>
+          </div>
           {draft.growthRate < 0 && (
             <div className="field" style={{ marginTop: 12 }}>
               <label>Valeur plancher (€) — optionnel</label>

@@ -20,7 +20,7 @@ export default function ProfilPage() {
             Qui es-<em>tu</em> ?
           </>
         }
-        lede="Ces informations personnalisent l'application et serviront de socle aux projections dans le temps."
+        lede="Ton identité, socle des finances courantes. Les jalons de vie (retraite…) se gèrent dans chaque plan, sur la page Projection."
       />
 
       <motion.div

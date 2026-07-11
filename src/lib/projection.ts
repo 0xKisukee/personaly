@@ -17,12 +17,23 @@
    la 1re année ; les intérêts d'emprunt décroissent donc dès l'année suivante.
    =========================================================================== */
 
-import type { Asset, AppState, PlannedEvent, ProjectionParams } from "./types";
-import { canReceiveDeposits } from "./types";
+import type { Asset, PlannedEvent, ProjectionParams, SimState } from "./types";
+import { canReceiveDeposits, eventYear, flowBounds, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
 
-export interface AssetDetail { id: string; label: string; value: number; growth: number; income: number; charges: number; deposit: number; }
+export interface ProjectOptions {
+  /**
+   * Tirage gaussien N(0,1) — active le mode STOCHASTIQUE : la croissance
+   * mensuelle de chaque actif à `volatility` non nulle devient
+   * μ_mensuel + (σ/√12)·z. Absent = projection déterministe (comportement sec).
+   */
+  gaussian?: () => number;
+  /** Saute la construction du détail annuel (Monte Carlo : des centaines de runs). */
+  light?: boolean;
+}
+
+export interface AssetDetail { id: string; label: string; value: number; growth: number; income: number; charges: number; deposit: number; withdrawal: number; }
 export interface LoanDetail { id: string; label: string; balance: number; interest: number; principal: number; insurance: number; }
 export interface FlowDetail { id: string; label: string; amount: number; }
 /** Un événement appliqué cette année-là : impact cash + termes d'enrichissement (frais, PV réalisée). */
@@ -54,6 +65,7 @@ export interface YearPoint {
   growth: number;
   savingsYield: number;
   deposited: number; // surplus versé dans l'actif cible (transfert, neutre pour le patrimoine)
+  withdrawn: number; // puisé dans les actifs pour combler un déficit (transfert, neutre aussi)
   eventCash: number; // rentrées/sorties ponctuelles (kind "cash") — compte dans l'enrichissement
   eventFees: number; // frais d'achat/vente — sortie sèche, compte dans l'enrichissement
   eventGain: number; // plus/moins-value réalisée (prix de vente fixé − valeur projetée)
@@ -65,6 +77,7 @@ export interface ProjectionEvent {
   year: number;
   label: string;
   kind: "loan" | "fi" | "planned";
+  id?: string; // id de l'événement planifié source (kind "planned") — pour l'édition depuis le graphe
 }
 
 export interface ProjectionWarning { year: number; label: string; }
@@ -79,17 +92,21 @@ export interface ProjectionResult {
 const EPS = 0.005;
 const monthlyRate = (annualPct: number) => Math.pow(1 + annualPct / 100, 1 / 12) - 1;
 
+// détail partagé du mode light (jamais muté : ses tableaux restent vides)
+const EMPTY_DETAIL: YearDetail = { assets: [], loans: [], incomes: [], expenses: [], events: [] };
+
 interface SimAsset { id: string; label: string; a: Asset; val: number; active: boolean; }
 interface SimLoan { id: string; label: string; balance: number; mRate: number; payment: number; term: number; paid: number; insurance: number; ended: boolean; }
 
-export function project(s: AppState, params: ProjectionParams): ProjectionResult {
-  const { horizon, savingsYield, inflation, indexExpenses, indexIncomes, realTerms, surplusTargets } = params;
+export function project(s: SimState, params: ProjectionParams, opts: ProjectOptions = {}): ProjectionResult {
+  const { horizon, savingsYield, inflation, indexExpenses, indexIncomes, realTerms, surplusTargets, withdrawalTargets } = params;
 
   const now = new Date();
   const startYear = now.getFullYear();
   const startMonth = now.getMonth(); // 0-11 : la 1re année ne couvre que les mois restants
   const birthYear = s.profile.birthDate ? new Date(s.profile.birthDate).getFullYear() : null;
   const ageAt = (y: number) => (birthYear ? y - birthYear : null);
+  const milestones = s.milestones ?? [];
 
   const assets: SimAsset[] = s.assets.map((a) => ({ id: a.id, label: a.label || "Actif", a, val: a.value || 0, active: true }));
   const loans: SimLoan[] = s.liabilities.map((l) => ({
@@ -99,19 +116,34 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     insurance: l.insurance || 0, ended: (l.outstanding || 0) <= EPS || (l.monthlyPayment || 0) <= 0,
   }));
 
-  // événements datés dans l'horizon, groupés par année d'application ; dans une même
-  // année, le cash ENTRE d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats)
+  const points: YearPoint[] = [];
+  const events: ProjectionEvent[] = [];
+  const warnings: ProjectionWarning[] = [];
+  let fiYearIndex: number | null = null;
+
+  // événements datés dans l'horizon, groupés par année d'application ; l'année
+  // effective résout l'ancrage jalon (l'instantané `year` sert de secours si le
+  // jalon a été supprimé — on le signale). Dans une même année, le cash ENTRE
+  // d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats).
   const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
   const plannedByYear = new Map<number, PlannedEvent[]>();
   for (const ev of s.events ?? []) {
     if (ev.disabled) continue;
-    const idx = ev.year - startYear;
+    const y = eventYear(ev, milestones);
+    if (ev.when && refYear(ev.when, milestones) === null) {
+      warnings.push({ year: y, label: `« ${ev.label} » : jalon supprimé — l'année ${ev.year} enregistrée est conservée` });
+    }
+    const idx = y - startYear;
     if (idx < 0 || idx > horizon) continue;
     const list = plannedByYear.get(idx) ?? [];
     list.push(ev);
     plannedByYear.set(idx, list);
   }
   for (const list of plannedByYear.values()) list.sort((a, b) => EVENT_ORDER[a.kind] - EVENT_ORDER[b.kind]);
+
+  // bornes effectives des flux (ancrages jalon résolus UNE fois : ils sont fixes)
+  const incomeBounds = s.incomes.map((it) => flowBounds(it, milestones));
+  const expenseBounds = s.expenses.map((it) => flowBounds(it, milestones));
 
   // les actifs achetés et emprunts contractés par événement sont pré-créés INACTIFS
   // (tableaux de taille fixe : les accumulateurs annuels restent alignés)
@@ -144,6 +176,14 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     targetIdxs.push(k);
   }
 
+  // cascade de retrait (miroir) : actifs où puiser, dans l'ordre, pour combler un déficit
+  const wTargetIdxs: number[] = [];
+  for (const id of withdrawalTargets ?? []) {
+    const k = assets.findIndex((x) => x.id === id && canReceiveDeposits(x.a));
+    if (k < 0 || wTargetIdxs.includes(k)) continue;
+    wTargetIdxs.push(k);
+  }
+
   const yieldM = monthlyRate(savingsYield);
   const flowFactor = (growth: number | undefined, indexFlag: boolean, i: number) =>
     Math.pow(1 + (growth ?? (indexFlag ? inflation : 0)) / 100, i);
@@ -152,10 +192,6 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
   const sumDebt = () => loans.reduce((t, x) => t + Math.max(0, x.balance), 0);
 
   let savings = 0;
-  const points: YearPoint[] = [];
-  const events: ProjectionEvent[] = [];
-  const warnings: ProjectionWarning[] = [];
-  let fiYearIndex: number | null = null;
 
   for (let i = 0; i <= horizon; i++) {
     const year = startYear + i;
@@ -174,10 +210,28 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     const aChg = new Array(assets.length).fill(0);
     const aGro = new Array(assets.length).fill(0);
     const aDep = new Array(assets.length).fill(0);
+    const aWdr = new Array(assets.length).fill(0);
     const lInt = new Array(loans.length).fill(0);
     const lPri = new Array(loans.length).fill(0);
     const lIns = new Array(loans.length).fill(0);
-    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0, yDep = 0;
+    let yD = 0, yEx = 0, yExp = 0, yChg = 0, yI = 0, yP = 0, yIns = 0, yG = 0, yY = 0, yDep = 0, yWdr = 0;
+
+    // comble un déficit d'épargne en puisant dans la cascade de retrait (dans
+    // l'ordre, à hauteur de la valeur de chaque actif) — transfert NEUTRE
+    // actif → épargne. Sans cascade configurée, ne fait rien : le déficit reste
+    // porté par l'épargne (comportement historique).
+    const coverDeficit = () => {
+      for (const k of wTargetIdxs) {
+        if (savings >= -EPS) break;
+        const A = assets[k];
+        if (!A.active || A.val <= 0) continue;
+        const w = Math.min(A.val, -savings);
+        A.val -= w;
+        savings += w;
+        aWdr[k] += w;
+        yWdr += w;
+      }
+    };
 
     // ---- ÉVÉNEMENTS de l'année : appliqués APRÈS l'instantané (ils font partie
     // des flux de l'année) et AVANT le 1er mois. Transferts neutres pour le
@@ -252,16 +306,18 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
         savings += cash;
       }
       evDetails.push({ id: ev.id, label: ev.label || ev.kind, kind: ev.kind, cash, fees, gain });
-      events.push({ yearIndex: i, year, label: ev.label || ev.kind, kind: "planned" });
+      events.push({ yearIndex: i, year, label: ev.label || ev.kind, kind: "planned", id: ev.id });
       if (cash < 0 && savings < -EPS) {
-        warnings.push({ year, label: `Épargne négative après « ${ev.label} » (${year})` });
+        // la cascade de retrait liquide d'abord (si configurée) ; on n'alerte que si ça ne suffit pas
+        coverDeficit();
+        if (savings < -EPS) warnings.push({ year, label: `Épargne négative après « ${ev.label} » (${year})` });
       }
     }
 
     const incFactor = (it: { growth?: number }) => flowFactor(it.growth, indexIncomes, i);
     const expFactor = (it: { growth?: number }) => flowFactor(it.growth, indexExpenses, i);
-    const incMonthly = s.incomes.map((it) => (isActiveYear(it.startYear, it.endYear, year) ? toMonthly(it) * incFactor(it) : 0));
-    const expMonthly = s.expenses.map((it) => (isActiveYear(it.startYear, it.endYear, year) ? toMonthly(it) * expFactor(it) : 0));
+    const incMonthly = s.incomes.map((it, k) => (isActiveYear(incomeBounds[k].start, incomeBounds[k].end, year) ? toMonthly(it) * incFactor(it) : 0));
+    const expMonthly = s.expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * expFactor(it) : 0));
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
 
@@ -333,12 +389,21 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       }
       savings += net - depTotal;
 
-      // croissance capitalisée (avec plancher)
+      // déficit du mois : la cascade de retrait puise dans les actifs (neutre)
+      // AVANT la croissance — l'argent retiré ne compose pas ce mois-ci
+      if (savings < -EPS) coverDeficit();
+
+      // croissance capitalisée (avec plancher) ; en mode stochastique, le taux
+      // mensuel est bruité par la volatilité de l'actif (Monte Carlo)
       let g = 0;
       for (let k = 0; k < assets.length; k++) {
         const A = assets[k];
         if (!A.active) continue;
-        let delta = A.val * monthlyRate(A.a.growthRate || 0);
+        let rate = monthlyRate(A.a.growthRate || 0);
+        if (opts.gaussian && (A.a.volatility || 0) > 0) {
+          rate += ((A.a.volatility! / 100) / Math.sqrt(12)) * opts.gaussian();
+        }
+        let delta = A.val * rate;
         if (A.a.valueFloor != null && A.val + delta < A.a.valueFloor) delta = A.a.valueFloor - A.val;
         A.val += delta; aGro[k] += delta; g += delta;
       }
@@ -355,12 +420,12 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       yI += mI; yP += mP; yIns += mIns; yG += g; yY += yieldThisMonth; yDep += depTotal;
     }
 
-    const detail: YearDetail = {
+    const detail: YearDetail = opts.light ? EMPTY_DETAIL : {
       // inclus si présent AU DÉBUT de l'année (colonne patrimoine : value = valeur de
       // début, 0 pour un actif acheté dans l'année) OU s'il a eu une activité dans
       // l'année (ses flux doivent apparaître dans les sous-lignes de la modale)
-      assets: assets.map((A, k) => (startActive[k] || aGro[k] !== 0 || aInc[k] !== 0 || aChg[k] !== 0 || aDep[k] !== 0
-        ? { id: A.id, label: A.label, value: startActive[k] ? startVals[k] : 0, growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k] }
+      assets: assets.map((A, k) => (startActive[k] || aGro[k] !== 0 || aInc[k] !== 0 || aChg[k] !== 0 || aDep[k] !== 0 || aWdr[k] !== 0
+        ? { id: A.id, label: A.label, value: startActive[k] ? startVals[k] : 0, growth: aGro[k], income: aInc[k], charges: aChg[k], deposit: aDep[k], withdrawal: aWdr[k] }
         : null)).filter(Boolean) as AssetDetail[],
       // balance en DÉBUT d'année, comme les actifs : la colonne patrimoine de la
       // modale doit sommer exactement au patrimoine net (lui aussi début d'année)
@@ -376,7 +441,7 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
     points.push({
       yearIndex: i, year, age: ageAt(year),
       grossAssets: startGross, debt: startDebt, savings: startSavings, netWorth: startGross - startDebt + startSavings,
-      distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY, deposited: yDep,
+      distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY, deposited: yDep, withdrawn: yWdr,
       eventCash: evCash, eventFees: evFees, eventGain: evGain,
       detail,
     });
@@ -389,9 +454,9 @@ export function project(s: AppState, params: ProjectionParams): ProjectionResult
       const scale = (v: number) => v / d;
       p.grossAssets = scale(p.grossAssets); p.debt = scale(p.debt); p.savings = scale(p.savings); p.netWorth = scale(p.netWorth);
       p.distributed = scale(p.distributed); p.extra = scale(p.extra); p.expenses = scale(p.expenses); p.charges = scale(p.charges);
-      p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield); p.deposited = scale(p.deposited);
+      p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield); p.deposited = scale(p.deposited); p.withdrawn = scale(p.withdrawn);
       p.eventCash = scale(p.eventCash); p.eventFees = scale(p.eventFees); p.eventGain = scale(p.eventGain);
-      p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); a.deposit = scale(a.deposit); });
+      p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); a.deposit = scale(a.deposit); a.withdrawal = scale(a.withdrawal); });
       p.detail.loans.forEach((l) => { l.balance = scale(l.balance); l.interest = scale(l.interest); l.principal = scale(l.principal); l.insurance = scale(l.insurance); });
       p.detail.incomes.forEach((f) => (f.amount = scale(f.amount)));
       p.detail.expenses.forEach((f) => (f.amount = scale(f.amount)));

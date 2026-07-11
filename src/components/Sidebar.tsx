@@ -1,6 +1,7 @@
 import { useStore } from "../lib/store";
 import { netWealth } from "../lib/selectors";
-import { ageFrom, money } from "../lib/format";
+import { ageFrom, money, uid } from "../lib/format";
+import { IconPlus } from "./icons";
 
 export type RouteId = "profil" | "patrimoine" | "flux" | "projection";
 
@@ -18,10 +19,30 @@ export default function Sidebar({
   active: RouteId;
   onNavigate: (r: RouteId) => void;
 }) {
-  const { state } = useStore();
+  const { state, update } = useStore();
   const net = netWealth(state);
   const name = state.profile.firstName.trim();
   const age = ageFrom(state.profile.birthDate);
+
+  const selectPlan = (id: string) => {
+    update({ activePlanId: id });
+    onNavigate("projection");
+  };
+
+  // nouveau plan = DUPLICATION du plan actif (jalons copiés avec les mêmes ids :
+  // les ancrages des flux se résolvent aussi dans le nouveau plan)
+  const addPlan = () => {
+    update((s) => {
+      const src = s.plans.find((pl) => pl.id === s.activePlanId) ?? s.plans[0];
+      const copy = {
+        ...structuredClone(src),
+        id: uid(),
+        name: `Plan ${s.plans.length + 1}`,
+      };
+      return { ...s, plans: [...s.plans, copy], activePlanId: copy.id };
+    });
+    onNavigate("projection");
+  };
 
   return (
     <aside className="sidebar">
@@ -45,6 +66,27 @@ export default function Sidebar({
             {r.soon && <span className="nav-soon">bientôt</span>}
           </button>
         ))}
+
+        {/* plans de simulation — les finances courantes au-dessus ne bougent jamais */}
+        <div className="side-plans">
+          <div className="eyebrow">Plans</div>
+          {state.plans.map((pl) => (
+            <button
+              key={pl.id}
+              className="plan-item"
+              data-active={pl.id === state.activePlanId && active === "projection"}
+              data-current={pl.id === state.activePlanId}
+              onClick={() => selectPlan(pl.id)}
+              title={`Ouvrir « ${pl.name} »`}
+            >
+              <span className="plan-dot" />
+              <span className="plan-name">{pl.name}</span>
+            </button>
+          ))}
+          <button className="plan-item plan-add" onClick={addPlan}>
+            <IconPlus size={13} /> Nouveau plan
+          </button>
+        </div>
       </nav>
 
       <div className="side-foot">
