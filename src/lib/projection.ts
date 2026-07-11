@@ -17,10 +17,16 @@
    la 1re année ; les intérêts d'emprunt décroissent donc dès l'année suivante.
    =========================================================================== */
 
-import type { Asset, PlannedEvent, ProjectionParams, SimState } from "./types";
+import type { Asset, FlowEvent, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState } from "./types";
 import { canReceiveDeposits, eventYear, flowBounds, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
+
+/** Forme minimale d'un flux consommée par le moteur (revenu/dépense OU flux d'événement). */
+interface FlowLike {
+  id: string; label: string; amount: number; period: Period;
+  startYear?: number; endYear?: number; startRef?: MilestoneRef; endRef?: MilestoneRef; growth?: number;
+}
 
 export interface ProjectOptions {
   /**
@@ -121,14 +127,26 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   const warnings: ProjectionWarning[] = [];
   let fiYearIndex: number | null = null;
 
-  // événements datés dans l'horizon, groupés par année d'application ; l'année
-  // effective résout l'ancrage jalon (l'instantané `year` sert de secours si le
-  // jalon a été supprimé — on le signale). Dans une même année, le cash ENTRE
+  // les événements FLUX (récurrents) sont traités comme des revenus/dépenses du
+  // plan, pas comme des événements ponctuels : on les replie dans les flux
+  // mensuels. `year`/`when` = début, `endYear`/`endRef` = fin. Leur libellé porte
+  // un préfixe ⚑ dans le détail pour les distinguer des flux des finances courantes.
+  const flowEvents = (s.events ?? []).filter((e): e is FlowEvent => e.kind === "flow" && !e.disabled);
+  const asFlowItem = (e: FlowEvent): FlowLike => ({
+    id: e.id, label: `⚑ ${e.label || "Flux"}`, amount: e.amount, period: e.period,
+    startYear: e.year, startRef: e.when, endYear: e.endYear, endRef: e.endRef, growth: e.growth,
+  });
+  const incomes: FlowLike[] = [...s.incomes, ...flowEvents.filter((e) => e.direction === "in").map(asFlowItem)];
+  const expenses: FlowLike[] = [...s.expenses, ...flowEvents.filter((e) => e.direction === "out").map(asFlowItem)];
+
+  // événements PONCTUELS datés dans l'horizon, groupés par année d'application ;
+  // l'année effective résout l'ancrage jalon (l'instantané `year` sert de secours
+  // si le jalon a été supprimé — on le signale). Dans une même année, le cash ENTRE
   // d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats).
-  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
-  const plannedByYear = new Map<number, PlannedEvent[]>();
+  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { flow: -1, sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
+  const plannedByYear = new Map<number, Exclude<PlannedEvent, FlowEvent>[]>();
   for (const ev of s.events ?? []) {
-    if (ev.disabled) continue;
+    if (ev.disabled || ev.kind === "flow") continue;
     const y = eventYear(ev, milestones);
     if (ev.when && refYear(ev.when, milestones) === null) {
       warnings.push({ year: y, label: `« ${ev.label} » : jalon supprimé — l'année ${ev.year} enregistrée est conservée` });
@@ -141,9 +159,16 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   }
   for (const list of plannedByYear.values()) list.sort((a, b) => EVENT_ORDER[a.kind] - EVENT_ORDER[b.kind]);
 
+  // jalon supprimé pour un flux d'événement : même garde-fou (l'année de secours reste)
+  for (const e of flowEvents) {
+    if (e.when && refYear(e.when, milestones) === null) {
+      warnings.push({ year: e.year, label: `« ${e.label} » : jalon supprimé — l'année ${e.year} enregistrée est conservée` });
+    }
+  }
+
   // bornes effectives des flux (ancrages jalon résolus UNE fois : ils sont fixes)
-  const incomeBounds = s.incomes.map((it) => flowBounds(it, milestones));
-  const expenseBounds = s.expenses.map((it) => flowBounds(it, milestones));
+  const incomeBounds = incomes.map((it) => flowBounds(it, milestones));
+  const expenseBounds = expenses.map((it) => flowBounds(it, milestones));
 
   // les actifs achetés et emprunts contractés par événement sont pré-créés INACTIFS
   // (tableaux de taille fixe : les accumulateurs annuels restent alignés)
@@ -316,8 +341,8 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
 
     const incFactor = (it: { growth?: number }) => flowFactor(it.growth, indexIncomes, i);
     const expFactor = (it: { growth?: number }) => flowFactor(it.growth, indexExpenses, i);
-    const incMonthly = s.incomes.map((it, k) => (isActiveYear(incomeBounds[k].start, incomeBounds[k].end, year) ? toMonthly(it) * incFactor(it) : 0));
-    const expMonthly = s.expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * expFactor(it) : 0));
+    const incMonthly = incomes.map((it, k) => (isActiveYear(incomeBounds[k].start, incomeBounds[k].end, year) ? toMonthly(it) * incFactor(it) : 0));
+    const expMonthly = expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * expFactor(it) : 0));
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
 
@@ -433,8 +458,8 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
         .filter((d) => d.balance > EPS || d.interest > 0 || d.principal > 0 || d.insurance > 0),
       // × months (pas × 12) : la 1re année partielle ne compte que les mois restants,
       // les sous-lignes doivent sommer au total de l'année
-      incomes: s.incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * months })).filter((d) => d.amount > 0),
-      expenses: s.expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * months })).filter((d) => d.amount > 0),
+      incomes: incomes.map((it, k) => ({ id: it.id, label: it.label || "Revenu", amount: incMonthly[k] * months })).filter((d) => d.amount > 0),
+      expenses: expenses.map((it, k) => ({ id: it.id, label: it.label || "Dépense", amount: expMonthly[k] * months })).filter((d) => d.amount > 0),
       events: evDetails,
     };
 

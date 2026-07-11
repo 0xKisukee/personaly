@@ -662,6 +662,60 @@ describe("jalons (dates relatives)", () => {
   });
 });
 
+/* ---------------------- flux récurrents (événement) ---------------------- */
+
+describe("flux récurrents (événement kind flow)", () => {
+  it("dépense mensuelle bornée : active seulement dans sa fenêtre, sous-ligne dédiée", () => {
+    const s = state({
+      incomes: [{ id: "sal", label: "S", category: "salaire", amount: 3_000, period: "monthly" }],
+      events: [{ id: "f", kind: "flow", label: "Conjoint", direction: "out", amount: 800, period: "monthly",
+        year: Y + 2, endYear: Y + 4 }],
+    });
+    const r = project(s, params({ horizon: 6 }));
+    expect(r.points[1].expenses).toBe(0); // avant le début
+    expect(r.points[2].expenses).toBeCloseTo(9_600, 4); // 800 × 12, année de début (inclusive)
+    expect(r.points[4].expenses).toBeCloseTo(9_600, 4); // année de fin (inclusive)
+    expect(r.points[5].expenses).toBe(0); // après la fin
+    // apparaît dans le détail des dépenses (préfixe ⚑)
+    expect(r.points[3].detail.expenses.some((e) => e.id === "f" && e.label.includes("Conjoint"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("revenu récurrent entrant : s'accumule en épargne, indexable", () => {
+    const flat = project(state({
+      events: [{ id: "f", kind: "flow", label: "Loyer perçu", direction: "in", amount: 500, period: "monthly", year: Y }],
+    }), params({ horizon: 3 }));
+    expect(flat.points[1].extra).toBeCloseTo(6_000, 4);
+    expect(flat.points[1].savings).toBeCloseTo(6_000, 4);
+
+    const indexed = project(state({
+      events: [{ id: "f", kind: "flow", label: "Loyer", direction: "in", amount: 500, period: "monthly", year: Y, growth: 3 }],
+    }), params({ horizon: 3 }));
+    expect(indexed.points[2].extra).toBeCloseTo(6_000 * 1.03 ** 2, 2); // growth propre appliqué
+  });
+
+  it("début ancré sur un jalon : suit le jalon (mariage → conjoint à charge)", () => {
+    const s = state({
+      milestones: [{ id: "mar", label: "Mariage", year: Y + 5 }],
+      incomes: [{ id: "sal", label: "S", category: "salaire", amount: 3_000, period: "monthly" }],
+      events: [{ id: "f", kind: "flow", label: "Conjoint", direction: "out", amount: 1_000, period: "monthly",
+        year: Y, when: { milestoneId: "mar" } }],
+    });
+    const r = project(s, params({ horizon: 8 }));
+    expect(r.points[4].expenses).toBe(0); // avant le mariage
+    expect(r.points[5].expenses).toBeCloseTo(12_000, 4); // dès le mariage
+    checkInvariants(r);
+  });
+
+  it("désactivé : ignoré", () => {
+    const s = state({
+      events: [{ id: "f", kind: "flow", label: "x", direction: "out", amount: 500, period: "monthly", year: Y, disabled: true }],
+    });
+    const r = project(s, params({ horizon: 3 }));
+    expect(r.points.every((pt) => pt.expenses === 0)).toBe(true);
+  });
+});
+
 /* ------------------------- cascade de retrait ------------------------- */
 
 describe("cascade de retrait (décumulation)", () => {

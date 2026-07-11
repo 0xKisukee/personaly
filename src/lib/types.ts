@@ -239,6 +239,25 @@ interface EventBase {
   note?: string;
 }
 
+/**
+ * Flux RÉCURRENT (revenu ou dépense) propre au plan, borné dans le temps — comme
+ * un flux de la page Flux, mais rattaché à une simulation. `year`/`when` (hérités
+ * d'EventBase) = DÉBUT du flux ; `endYear`/`endRef` = fin optionnelle (sinon court
+ * jusqu'à la fin de l'horizon). Ex. « conjoint à charge : −800 €/mois à partir du
+ * Mariage (2037) ». `growth` = revalorisation propre (sinon suit l'inflation selon
+ * indexIncomes/indexExpenses). Contrairement aux autres événements (ponctuels,
+ * appliqués une année), celui-ci alimente le flux mensuel comme un revenu/dépense.
+ */
+export interface FlowEvent extends EventBase {
+  kind: "flow";
+  direction: "in" | "out";
+  amount: number;
+  period: Period;
+  endYear?: number;
+  endRef?: MilestoneRef;
+  growth?: number;
+}
+
 /** Achat d'actif, payé cash (price + fees sortent de l'épargne — un emprunt de la même année peut la re-remplir). */
 export interface BuyAssetEvent extends EventBase {
   kind: "buy";
@@ -288,7 +307,7 @@ export interface DepositEvent extends EventBase {
   amount: number;
 }
 
-export type PlannedEvent = BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent | DepositEvent;
+export type PlannedEvent = FlowEvent | BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent | DepositEvent;
 
 /* --------------------------- PROJECTION --------------------------- */
 

@@ -40,6 +40,7 @@ const emptyEvent = (year: number): PlannedEvent => ({
 function switchKind(ev: PlannedEvent, kind: PlannedEvent["kind"], s: AppStateLike): PlannedEvent {
   const base = { id: ev.id, label: ev.label, year: ev.year, when: ev.when };
   switch (kind) {
+    case "flow": return { ...base, kind, direction: "out", amount: 0, period: "monthly" };
     case "cash": return { ...base, kind, amount: 0 };
     case "buy": return {
       ...base, kind, price: 0, fees: 0,
@@ -88,6 +89,11 @@ function depositableAssets(s: AppStateLike): { id: string; label: string }[] {
 
 function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
   switch (ev.kind) {
+    case "flow": {
+      const per = ev.period === "monthly" ? "/mois" : "/an";
+      const endTxt = whenLabel(ev.endYear, ev.endRef, s.milestones);
+      return `Flux ${ev.direction === "in" ? "entrant" : "sortant"} · ${ev.direction === "in" ? "+" : "−"}${money(ev.amount)}${per}${endTxt ? ` jusqu'à ${endTxt}` : ""}`;
+    }
     case "buy":
       return `Achat · ${money(ev.price)}${ev.fees ? ` + ${money(ev.fees)} de frais` : ""} · ${CAT_LABELS[ev.asset.category]}${ev.asset.growthRate ? ` ${ev.asset.growthRate > 0 ? "+" : ""}${percent(ev.asset.growthRate)}/an` : ""}`;
     case "sell": {
@@ -614,6 +620,7 @@ function CascadeEditor({ mode, label, eligible, ids, onChange }: {
 /* ----------------------- EVENT MODAL ----------------------- */
 
 const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
+  { id: "flow", label: "Flux récurrent" },
   { id: "cash", label: "Rentrée / Sortie" },
   { id: "buy", label: "Achat" },
   { id: "sell", label: "Vente" },
@@ -636,7 +643,8 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
   const valid =
     draft.label.trim().length > 0 &&
     Number.isFinite(effYear) && effYear >= currentYear &&
-    (draft.kind === "cash" ? draft.amount !== 0
+    (draft.kind === "flow" ? draft.amount > 0
+      : draft.kind === "cash" ? draft.amount !== 0
       : draft.kind === "buy" ? draft.price > 0
       : draft.kind === "sell" ? !!draft.assetId
       : draft.kind === "loan" ? draft.amount > 0 && draft.termMonths > 0
@@ -673,7 +681,7 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
             value={draft.label} onChange={(e) => set({ label: e.target.value })} />
         </div>
         <div className="field span-2">
-          <label>Quand</label>
+          <label>{draft.kind === "flow" ? "Début" : "Quand"}</label>
           <WhenPicker
             milestones={s.milestones}
             minYear={currentYear}
@@ -681,6 +689,52 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
             onChange={(v) => set({ year: v.year ?? 0, when: v.ref })}
           />
         </div>
+
+        {draft.kind === "flow" && (
+          <>
+            <div className="field">
+              <label>Sens</label>
+              <div className="segment">
+                <button data-on={draft.direction === "in"} onClick={() => set({ direction: "in" })}>Entrant</button>
+                <button data-on={draft.direction === "out"} onClick={() => set({ direction: "out" })}>Sortant</button>
+              </div>
+            </div>
+            <div className="field">
+              <label>Périodicité</label>
+              <div className="segment">
+                <button data-on={draft.period === "monthly"} onClick={() => set({ period: "monthly" })}>Mensuel</button>
+                <button data-on={draft.period === "yearly"} onClick={() => set({ period: "yearly" })}>Annuel</button>
+              </div>
+            </div>
+            <div className="field">
+              <label>Montant (€) {draft.period === "monthly" ? "/ mois" : "/ an"}</label>
+              <input className="input mono" type="number" placeholder="ex. 800"
+                value={draft.amount || ""} onChange={(e) => set({ amount: Number(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>Revalorisation (%/an)</label>
+              <input className="input mono" type="number" step="0.1" placeholder="vide = inflation"
+                value={draft.growth ?? ""}
+                onChange={(e) => set({ growth: e.target.value !== "" ? Number(e.target.value) : undefined })} />
+            </div>
+            <div className="field span-2">
+              <label>Fin</label>
+              <WhenPicker
+                milestones={s.milestones}
+                allowEmpty
+                emptyLabel="Sans fin (jusqu'à l'horizon)"
+                value={{ year: draft.endYear, ref: draft.endRef }}
+                onChange={(v) => set({ endYear: v.year, endRef: v.ref })}
+              />
+            </div>
+            <span className="help span-2">
+              Flux <b>récurrent</b> propre à ce plan (comme un revenu/dépense de la page Flux, mais lié à une
+              simulation). Ex. « conjoint à charge : −800 €/mois à partir du <b>Mariage</b> ». Ancre le début et la
+              fin sur un <b>jalon</b> pour qu'ils suivent tes hypothèses. Revalorisation vide = suit l'inflation.
+            </span>
+          </>
+        )}
+
         {draft.kind === "cash" && (
           <>
             <div className="field">
