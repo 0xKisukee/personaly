@@ -908,6 +908,28 @@ function EventModal({ draft, s, onChange, onSave, onClose }: {
 
 /* --------------------------- CHART --------------------------- */
 
+// Positions horizontales proportionnelles au TEMPS RÉEL écoulé, pas à l'indice
+// d'année : l'année 0 ne couvre que les mois restants de l'année civile, donc son
+// intervalle est compressé — sinon la pente du début paraît anormalement faible.
+// frac(0) = 0 (aujourd'hui), frac(i≥1) = (part. + i−1) / total, borné à [0,1].
+function timeFractions(n: number): number[] {
+  if (n <= 1) return [0];
+  const partial = (12 - new Date().getMonth()) / 12; // durée (en années) de l'année 0
+  const t = (i: number) => (i === 0 ? 0 : partial + (i - 1));
+  const total = t(n - 1) || 1;
+  return Array.from({ length: n }, (_, i) => t(i) / total);
+}
+
+/** Index du point dont la position horizontale (fraction 0..1) est la plus proche de `f`. */
+function nearestIndex(fracs: number[], f: number): number {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < fracs.length; i++) {
+    const d = Math.abs(fracs[i] - f);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
 const MARK_COLORS: Record<ProjectionEvent["kind"], string> = {
   planned: "var(--brass-bright)",
   loan: "var(--sage)",
@@ -944,7 +966,8 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
   const domainMax = (maxV || 1) * 1.08;
   const domainMin = minV < 0 ? minV * 1.08 : 0;
 
-  const x = (i: number) => M.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
+  const fracs = timeFractions(n);
+  const x = (i: number) => M.left + fracs[i] * innerW;
   const y = (v: number) => M.top + innerH - ((v - domainMin) / (domainMax - domainMin || 1)) * innerH;
 
   const line = points.map((pt, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(pt.netWorth).toFixed(1)}`).join(" ");
@@ -965,10 +988,14 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
   const xStep = Math.max(1, Math.ceil((n - 1) / 8));
   const xTickIdx = points.map((_, i) => i).filter((i) => i % xStep === 0 || i === n - 1);
 
-  // jalons visibles sur l'horizon
-  const msMarks = milestones
-    .map((m) => ({ ...m, idx: m.year - points[0].year }))
-    .filter((m) => m.idx >= 0 && m.idx < n);
+  // jalons visibles sur l'horizon, GROUPÉS par année (plusieurs jalons la même
+  // année partagent la ligne : leurs libellés sont empilés au lieu de se superposer)
+  const msByIdx = new Map<number, Milestone[]>();
+  for (const m of milestones) {
+    const idx = m.year - points[0].year;
+    if (idx < 0 || idx >= n) continue;
+    (msByIdx.get(idx) ?? msByIdx.set(idx, []).get(idx)!).push(m);
+  }
 
   // marqueurs d'événements, empilés quand plusieurs tombent la même année
   const marksByYear = new Map<number, ProjectionEvent[]>();
@@ -985,9 +1012,8 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
     const px = e.clientX - rect.left;
     const plotLeft = (rect.width * M.left) / W;
     const plotW = (rect.width * innerW) / W;
-    let i = Math.round(((px - plotLeft) / plotW) * (n - 1));
-    i = Math.max(0, Math.min(n - 1, i));
-    setHover(i);
+    const f = Math.max(0, Math.min(1, (px - plotLeft) / plotW));
+    setHover(nearestIndex(fracs, f));
   };
 
   const hp = hover !== null ? points[hover] : null;
@@ -1013,20 +1039,22 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
           <line x1={M.left} x2={W - M.right} y1={y(0)} y2={y(0)} stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="4 4" />
         )}
 
-        {/* jalons : repères verticaux nommés — le ◇ est CENTRÉ sur la ligne,
-            le nom à côté (à gauche si le jalon touche le bord droit) */}
-        {msMarks.map((m) => {
-          const mx = x(m.idx);
+        {/* jalons : repères verticaux nommés — le ◇ est CENTRÉ sur la ligne, les
+            noms à côté (à gauche si près du bord droit), EMPILÉS si même année */}
+        {[...msByIdx.entries()].map(([idx, list]) => {
+          const mx = x(idx);
           const flip = mx > W - M.right - 90; // le libellé sortirait du graphe
           return (
-            <g key={m.id}>
+            <g key={idx}>
               <line x1={mx} x2={mx} y1={M.top} y2={M.top + innerH}
                 stroke="var(--sage)" strokeWidth="1" strokeDasharray="2 6" strokeOpacity="0.75" />
               <text x={mx} y={M.top + 4} textAnchor="middle" className="chart-axis" style={{ fill: "var(--sage)" }}>◇</text>
-              <text x={flip ? mx - 9 : mx + 9} y={M.top + 4} textAnchor={flip ? "end" : "start"}
-                className="chart-axis" style={{ fill: "var(--sage)" }}>
-                {m.label || "Jalon"}
-              </text>
+              {list.map((m, j) => (
+                <text key={m.id} x={flip ? mx - 9 : mx + 9} y={M.top + 4 + j * 14} textAnchor={flip ? "end" : "start"}
+                  className="chart-axis" style={{ fill: "var(--sage)" }}>
+                  {m.label || "Jalon"}
+                </text>
+              ))}
             </g>
           );
         })}
@@ -1062,11 +1090,13 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
         )}
 
         {/* marqueurs d'événements — empilés EN HAUT le long de leur ligne d'année
-            (jamais sous l'infobulle qui suit la courbe) ; cliquables si planifiés */}
-        {[...marksByYear.entries()].map(([yi, list]) =>
-          list.map((e, j) => {
+            (jamais sous l'infobulle qui suit la courbe) ; cliquables si planifiés.
+            Décalés SOUS les libellés de jalons de la même année pour ne pas les recouvrir. */}
+        {[...marksByYear.entries()].map(([yi, list]) => {
+          const msOffset = (msByIdx.get(yi)?.length ?? 0) * 14; // hauteur des libellés de jalons
+          return list.map((e, j) => {
             const cx = x(yi);
-            const cy = M.top + 14 + j * 22;
+            const cy = M.top + 14 + msOffset + j * 22;
             const clickable = e.kind === "planned" && !!e.id && !!onEventClick;
             return (
               <g
@@ -1083,8 +1113,8 @@ function NetWorthChart({ points, events, milestones, mode, onEventClick }: {
                 <title>{e.label} · {e.year}{clickable ? " — cliquer pour modifier" : ""}</title>
               </g>
             );
-          })
-        )}
+          });
+        })}
       </svg>
 
       {hp && (
@@ -1119,7 +1149,8 @@ function CompareChart({ series }: { series: { name: string; points: YearPoint[] 
   const domainMax = (maxV || 1) * 1.08;
   const domainMin = minV < 0 ? minV * 1.08 : 0;
 
-  const x = (i: number) => M.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
+  const fracs = timeFractions(n);
+  const x = (i: number) => M.left + fracs[i] * innerW;
   const y = (v: number) => M.top + innerH - ((v - domainMin) / (domainMax - domainMin || 1)) * innerH;
   const line = (pts: YearPoint[]) =>
     pts.map((pt, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(pt.netWorth).toFixed(1)}`).join(" ");
@@ -1136,9 +1167,8 @@ function CompareChart({ series }: { series: { name: string; points: YearPoint[] 
     const px = e.clientX - rect.left;
     const plotLeft = (rect.width * M.left) / W;
     const plotW = (rect.width * innerW) / W;
-    let i = Math.round(((px - plotLeft) / plotW) * (n - 1));
-    i = Math.max(0, Math.min(n - 1, i));
-    setHover(i);
+    const f = Math.max(0, Math.min(1, (px - plotLeft) / plotW));
+    setHover(nearestIndex(fracs, f));
   };
 
   return (
@@ -1352,7 +1382,8 @@ function FanChart({ bands, det }: { bands: MonteCarloBand[]; det: YearPoint[] })
   const domainMax = (maxV || 1) * 1.08;
   const domainMin = minV < 0 ? minV * 1.08 : 0;
 
-  const x = (i: number) => M.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
+  const fracs = timeFractions(n);
+  const x = (i: number) => M.left + fracs[i] * innerW;
   const y = (v: number) => M.top + innerH - ((v - domainMin) / (domainMax - domainMin || 1)) * innerH;
 
   const path = (get: (b: MonteCarloBand) => number) =>
@@ -1376,9 +1407,8 @@ function FanChart({ bands, det }: { bands: MonteCarloBand[]; det: YearPoint[] })
     const px = e.clientX - rect.left;
     const plotLeft = (rect.width * M.left) / W;
     const plotW = (rect.width * innerW) / W;
-    let i = Math.round(((px - plotLeft) / plotW) * (n - 1));
-    i = Math.max(0, Math.min(n - 1, i));
-    setHover(i);
+    const f = Math.max(0, Math.min(1, (px - plotLeft) / plotW));
+    setHover(nearestIndex(fracs, f));
   };
 
   const hb = hover !== null ? bands[hover] : null;
