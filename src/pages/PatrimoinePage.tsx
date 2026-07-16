@@ -11,11 +11,12 @@ import type {
 import { canReceiveDeposits } from "../lib/types";
 import {
   assetYearlyIncome,
+  assetYearlyNet,
   grossWealth,
   netWealth,
   totalLiabilities,
 } from "../lib/selectors";
-import { money, signedMoney, percent, uid, periodLabel } from "../lib/format";
+import { money, signedMoney, percent, uid, toYearly } from "../lib/format";
 import { monthlyPayment, formatDuration, formatEndDate } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
@@ -79,7 +80,8 @@ export default function PatrimoinePage() {
   const gross = grossWealth(state);
   const liab = totalLiabilities(state);
   const net = netWealth(state);
-  const yearlyIncome = state.assets.reduce((s, a) => s + assetYearlyIncome(a), 0);
+  // revenu NET (revenus distribués − charges de détention) : le vrai bénéfice du patrimoine
+  const yearlyNet = state.assets.reduce((s, a) => s + assetYearlyNet(a), 0);
 
   const saveAsset = (a: Asset) => {
     update((s) => {
@@ -150,9 +152,9 @@ export default function PatrimoinePage() {
           <h2>Actifs</h2>
           <span className="count">{state.assets.length}</span>
           <span className="spacer" />
-          {yearlyIncome > 0 && (
-            <span className="tag" style={{ borderColor: "var(--line-brass)", color: "var(--gain)" }}>
-              <span className="dot gain" /> {signedMoney(yearlyIncome)} / an de revenus
+          {yearlyNet !== 0 && (
+            <span className="tag" style={{ borderColor: "var(--line-brass)", color: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }}>
+              <span className="dot" style={{ background: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }} /> {signedMoney(yearlyNet)} / an net
             </span>
           )}
           <button className="btn btn-brass" onClick={() => setAssetDraft(emptyAsset())}>
@@ -170,6 +172,8 @@ export default function PatrimoinePage() {
             {state.assets.map((a, i) => {
               const Meta = ASSET_META[a.category];
               const inc = assetYearlyIncome(a);
+              const chg = toYearly(a.charges);
+              const net = inc - chg; // bénéfice réel de détention
               return (
                 <motion.div
                   key={a.id}
@@ -186,10 +190,11 @@ export default function PatrimoinePage() {
                     <div className="row-meta">
                       <span>{Meta.label}</span>
                       {a.incomeMode === "rate" && a.incomeRate ? (
-                        <>· <span>revenu {percent(a.incomeRate)} versé</span></>
-                      ) : a.incomeMode === "amount" ? (
-                        <>· <span>revenu {money(a.income?.amount ?? 0)} {periodLabel(a.income?.period ?? "monthly")}</span></>
+                        <>· <span style={{ color: "var(--gain)" }}>revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
+                      ) : a.incomeMode === "amount" && inc > 0 ? (
+                        <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
                       ) : null}
+                      {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
                       {a.growthRate !== 0 && (
                         <span className="tag" style={{ color: a.growthRate < 0 ? "var(--drain)" : "var(--sage)" }}>
                           {a.growthRate > 0 ? "↗" : "↘"} valeur {a.growthRate > 0 ? "+" : ""}{percent(a.growthRate)}/an
@@ -199,9 +204,15 @@ export default function PatrimoinePage() {
                   </div>
                   <div className="row-val">
                     {money(a.value)}
-                    <div className={"flux " + (inc <= 0 ? "zero" : "")}>
-                      {inc > 0 ? signedMoney(inc) + " /an" : "pas de revenu"}
-                    </div>
+                    {/* bénéfice NET de détention : revenu distribué − charges */}
+                    {inc === 0 && chg === 0 ? (
+                      <div className="flux zero">pas de revenu</div>
+                    ) : (
+                      <div className="flux" style={{ color: net >= 0 ? "var(--gain)" : "var(--drain)" }}
+                        title={chg > 0 ? `revenu ${money(inc)} − charges ${money(chg)}` : undefined}>
+                        {signedMoney(net)} /an net
+                      </div>
+                    )}
                   </div>
                   <div className="row-actions">
                     <button className="icon-btn" onClick={() => setAssetDraft({ ...a })} aria-label="Modifier">

@@ -11,6 +11,16 @@ export function assetYearlyIncome(a: Asset): number {
   return 0;
 }
 
+/**
+ * Revenu NET d'un actif (annuel) : revenu distribué − charges de détention.
+ * C'est le vrai « bénéfice » de possession : un bien loué 900 €/mois avec 100 €/mois
+ * de charges rapporte 9 600 €/an, pas 10 800 €. Peut être négatif (résidence sans
+ * revenu mais avec taxe foncière/copro : elle coûte de l'argent à détenir).
+ */
+export function assetYearlyNet(a: Asset): number {
+  return assetYearlyIncome(a) - toYearly(a.charges);
+}
+
 export function grossWealth(s: AppState): number {
   return s.assets.reduce((sum, a) => sum + (a.value || 0), 0);
 }
