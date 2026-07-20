@@ -1,0 +1,54 @@
+/* =========================================================================
+   personaly — design system
+   Aesthetic: "maison de patrimoine" — dark forest ink, brass & ivory.
+   Editorial serif (Fraunces) + humanist grotesque (Hanken) + mono figures.
+   ========================================================================= */
+
+:root {
+  /* base ink + surfaces */
+  --bg: #0a0d0b;
+  --bg-2: #0d110e;
+  --panel: #131813;
+  --panel-2: #171d17;
+  --panel-hi: #1d241c;
+
+  /* ink / text */
+  --ink: #f3efe4;
+  --ink-soft: #cbd0c4;
+  --ink-mute: #8b948a;
+  --ink-faint: #5d655c;
+
+  /* brass accent — wealth */
+  --brass: #cba96b;
+  --brass-bright: #e3c585;
+  --brass-deep: #9a8049;
+
+  /* sage / vegetal secondary */
+  --sage: #8aa98f;
+  --sage-deep: #5b7560;
+
+  /* semantic flux */
+  --gain: #93c39c;
+  --gain-deep: #5d8f68;
+  --drain: #d59873;
+  --drain-deep: #b06f4d;
+
+  /* lines */
+  --line: rgba(243, 239, 228, 0.08);
+  --line-strong: rgba(243, 239, 228, 0.14);
+  --line-brass: rgba(203, 169, 107, 0.28);
+
+  /* type */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, monospace;
+
+  /* shape */
+  --r-sm: 8px;
+  --r: 14px;
+  --r-lg: 22px;
+  --shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.75);
+  --shadow-soft: 0 10px 30px -18px rgba(0, 0, 0, 0.6);
+
+  --sidebar-w: 264px;
+}

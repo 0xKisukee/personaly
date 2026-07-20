@@ -591,16 +591,16 @@ Historique conservé — question → **ta réponse** → décision appliquée d
 Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 
 **Reprise rapide**
-- **Dernière session :** ✅ **Phase 0 terminée** (routeur, export/import JSON, garde-fous). Build + 118 tests verts, dev server OK.
-- **Prochaine étape :** Phase 1 — éclater `index.css` en `styles/*` + extraire les primitives `ui/*` (choisir la direction de design §12, défaut D1).
-- **Branche en cours :** `main` (Phase 0 en working tree, **pas encore committée**).
+- **Dernière session :** ✅ **Phase 0 + Phase 1 (structurel)** terminées. `index.css` éclaté en `styles/*` (split **iso-visuel** prouvé : bundle CSS identique au bit près), primitives `ui/*` créées + `MoneyInput`, **Profil migré (pilote)**. Build + 118 tests verts, dev server OK.
+- **Prochaine étape :** Phase 2 — Taxonomie d'actifs (`epargne`/`liquidites`, flag `rented`, registre `lib/assets.ts`, presets, migration store). ⚠️ phase la plus risquée. Avant : **choisir la direction de design §12** (défaut D1) si on veut restyler, sinon on reste iso-visuel.
+- **Branche en cours :** `main` (Phases 0 + 1 en working tree, **pas encore committées** — 2 commits séparés conseillés : « split CSS pur » puis « primitives + Profil »).
 
 **État par phase**
 
 | Phase | Statut | Notes |
 |---|---|---|
 | 0 — Socle (routeur, export/import, garde-fous) | ✅ | `react-router-dom` (BrowserRouter) ; `routes.tsx` ; `migrateState`/`serializeState`/`importState` ; contrôles données + indicateur « Enregistré » en sidebar ; vue Projection portée par `/projection/:vue`. |
-| 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ⬜ | direction design §12 à choisir |
+| 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ✅ (structurel) | `styles/{tokens,base,primitives,layout,charts}.css` (split contigu iso-visuel) ; `ui/{Button,Input,MoneyInput,Field,Select,Segment,Card,Tag}` + barrel ; Profil migré. **Reste optionnel :** `Stat`/`Tooltip`/`Row` + déplacer `Modal`→`ui/` (différés en phase 5, avec vrais consommateurs) ; rafraîchissement de palette §12 (non appliqué, on est resté iso-visuel). |
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ⬜ | phase la plus risquée |
 | 3 — Couleur de performance | ⬜ | — |
 | 4 — Dashboard | ⬜ | — |
@@ -619,6 +619,17 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-20 — Phase 1 (structurel).** `index.css` (1665 l.) éclaté en 5 modules
+  `styles/*` par **découpage contigu** (ranges 1–54 / 55–143 / 144–311 / 312–918 / 919–fin)
+  importés dans l'ordre par `main.tsx` → cascade **identique** (concat == original vérifié
+  par `diff`, et bundle Vite au même hash). Primitives `ui/` : `Button`, `Input`, `Field`,
+  `Select`, `Segment`, `Card` (polymorphe via `as`), `Tag`, **`MoneyInput`** (groupage
+  milliers + suffixe €, brut à l'édition), + barrel `ui/index.ts` + CSS `.money-field`.
+  `ProfilPage` migré vers `Card`/`Field`/`Input` (pilote validant l'API). Build + 118 tests
+  verts, boot OK. **Choix assumés :** split **contigu** (pas sémantique) pour garantir
+  l'iso-visuel sans risque de cascade — une redistribution sémantique des règles pourra se
+  faire plus tard derrière des contrôles visuels ; `Modal` **non** déplacé et `Stat`/`Tooltip`
+  **non** créés (pas de consommateur à valider → phase 5) pour éviter du code mort.
 - **2026-07-20 — Phase 0.** Ajout `react-router-dom` ; `src/routes.tsx` (métadonnées nav +
   slugs des vues de Projection) ; `App.tsx` → shell `BrowserRouter` + `<Routes>` animées ;
   `Sidebar` réécrite (hooks routeur) + **`DataControls`** (export/import/reset + indicateur

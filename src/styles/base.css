@@ -1,0 +1,89 @@
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(120% 90% at 12% -5%, rgba(203, 169, 107, 0.1), transparent 55%),
+    radial-gradient(90% 80% at 100% 0%, rgba(91, 117, 96, 0.12), transparent 50%),
+    radial-gradient(140% 120% at 50% 110%, rgba(13, 17, 14, 0.9), transparent 60%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01" on;
+  line-height: 1.5;
+}
+
+::selection {
+  background: var(--brass);
+  color: #1a1408;
+}
+
+/* scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+input,
+select {
+  font-family: inherit;
+}
+
+/* ---------- typography helpers ---------- */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+.serif {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" on, "zero" on;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+.num {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" on, "zero" on;
+  letter-spacing: -0.01em;
+}
+

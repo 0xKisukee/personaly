@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useStore } from "../lib/store";
 import { ageFrom } from "../lib/format";
 import PageHeader from "../components/PageHeader";
+import { Card, Field, Input } from "../ui";
 
 export default function ProfilPage() {
   const { state, update } = useStore();
@@ -23,51 +24,47 @@ export default function ProfilPage() {
         lede="Ton identité, socle des finances courantes. Les jalons de vie (retraite…) se gèrent dans chaque plan, sur la page Projection."
       />
 
-      <motion.div
-        className="card"
+      <Card
+        as={motion.div}
         style={{ padding: 28, maxWidth: 560 }}
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.05 }}
       >
         <div className="form-grid">
-          <div className="field span-2">
-            <label htmlFor="fn">Prénom</label>
-            <input
+          <Field span2 label="Prénom" htmlFor="fn">
+            <Input
               id="fn"
-              className="input"
               placeholder="ex. Aymane"
               value={profile.firstName}
               onChange={(e) => setProfile({ firstName: e.target.value })}
             />
-          </div>
-          <div className="field">
-            <label htmlFor="bd">Date de naissance</label>
-            <input
+          </Field>
+          <Field label="Date de naissance" htmlFor="bd">
+            <Input
               id="bd"
               type="date"
-              className="input mono"
+              mono
               value={profile.birthDate}
               max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setProfile({ birthDate: e.target.value })}
             />
-          </div>
-          <div className="field">
-            <label>Âge</label>
+          </Field>
+          <Field label="Âge">
             <div
               className="input mono"
               style={{ display: "flex", alignItems: "center", color: age === null ? "var(--ink-faint)" : "var(--ink)" }}
             >
               {age !== null ? `${age} ans` : "—"}
             </div>
-          </div>
+          </Field>
         </div>
 
         <div className="divider" />
         <div className="hint">
           <span className="dot brass" /> Tout est enregistré localement sur cet appareil. Aucune donnée ne quitte ton navigateur.
         </div>
-      </motion.div>
+      </Card>
     </>
   );
 }
