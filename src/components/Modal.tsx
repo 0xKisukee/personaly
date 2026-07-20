@@ -15,7 +15,21 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+
+    // verrouille le scroll de l'arrière-plan tant que la modale est ouverte
+    // (compense la largeur de la scrollbar pour éviter un saut de mise en page)
+    const { body } = document;
+    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
+    const prevOverflow = body.style.overflow;
+    const prevPad = body.style.paddingRight;
+    body.style.overflow = "hidden";
+    if (scrollbarW > 0) body.style.paddingRight = `${scrollbarW}px`;
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevOverflow;
+      body.style.paddingRight = prevPad;
+    };
   }, [open, onClose]);
 
   return (

@@ -610,6 +610,12 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
+- **⚠️ Perf de scroll (macOS) — 2 pièges à bannir :** (1) `backdrop-filter: blur` sur un
+  overlay derrière un conteneur qui scrolle (ex. `.scrim` de la modale) → re-rasterisation
+  plein écran par frame ; retiré, remplacé par un assombrissement opaque. (2)
+  `background-attachment: fixed` → repeint le fond à chaque frame ; remplacé par un calque
+  `body::before { position: fixed }` (même rendu, composité une fois). **Ne pas réintroduire
+  ces deux patterns** dans les phases design/responsive.
 - **Accents de catégorie = identité neutre, jamais perf.** Un actif d'une catégorie « à
   risque » n'est pas mauvais par nature (voiture de collection qui s'apprécie, immo qui se
   déprécie). `--gain`/`--drain` sont réservés au **langage de performance par actif** (phase 3).

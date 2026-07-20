@@ -450,8 +450,10 @@
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(6, 8, 7, 0.62);
-  backdrop-filter: blur(5px);
+  /* Assombrissement opaque — PAS de backdrop-filter : un flou plein écran derrière
+     un conteneur qui scrolle (.modal) force une re-rasterisation par frame (jank
+     sévère sur macOS). L'opacité plus forte redonne la même profondeur. */
+  background: rgba(6, 8, 7, 0.74);
   display: grid;
   place-items: center;
   padding: 24px;

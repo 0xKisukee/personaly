@@ -15,15 +15,25 @@ body {
   font-family: var(--font-ui);
   color: var(--ink);
   background-color: var(--bg);
-  background-image:
-    radial-gradient(120% 90% at 12% -5%, rgba(203, 169, 107, 0.1), transparent 55%),
-    radial-gradient(90% 80% at 100% 0%, rgba(91, 117, 96, 0.12), transparent 50%),
-    radial-gradient(140% 120% at 50% 110%, rgba(13, 17, 14, 0.9), transparent 60%);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-feature-settings: "ss01" on;
   line-height: 1.5;
+}
+
+/* Dégradés d'ambiance sur un CALQUE FIXE dédié plutôt que `background-attachment:
+   fixed` : même rendu collé au viewport, mais composité une seule fois → aucun
+   repaint des dégradés à chaque frame de scroll (cause classique de jank sur macOS). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(120% 90% at 12% -5%, rgba(203, 169, 107, 0.1), transparent 55%),
+    radial-gradient(90% 80% at 100% 0%, rgba(91, 117, 96, 0.12), transparent 50%),
+    radial-gradient(140% 120% at 50% 110%, rgba(13, 17, 14, 0.9), transparent 60%);
 }
 
 ::selection {
