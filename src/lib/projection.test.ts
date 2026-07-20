@@ -224,7 +224,7 @@ describe("emprunts", () => {
   });
 
   it("dette simple sans mensualité : pèse sur le net, aucun flux, ne s'éteint jamais", () => {
-    const s = state({ liabilities: [loan({ outstanding: 10_000, category: "dette" })] });
+    const s = state({ liabilities: [loan({ outstanding: 10_000, category: "autre" })] });
     const r = project(s, params({ horizon: 5 }));
     expect(last(r).debt).toBe(10_000);
     expect(last(r).netWorth).toBe(-10_000);
@@ -796,7 +796,7 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
       ],
       liabilities: [
         loan({ id: "l-rp", label: "Prêt RP", outstanding: 120_000, rate: 3.2, termMonths: 240, monthlyPayment: pmt, insurance: 28 }),
-        loan({ id: "l-conso", label: "Conso", category: "credit_conso", outstanding: 8_000, rate: 5, termMonths: 36, monthlyPayment: monthlyPayment(8_000, 5, 36) }),
+        loan({ id: "l-conso", label: "Conso", category: "credit", outstanding: 8_000, rate: 5, termMonths: 36, monthlyPayment: monthlyPayment(8_000, 5, 36) }),
       ],
       incomes: [
         { id: "sal", label: "Salaire", category: "salaire", amount: 3_400, period: "monthly", endYear: Y + 20, growth: 2.5 },

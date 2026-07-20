@@ -31,9 +31,7 @@ import { IconBox, IconDebt, IconEdit, IconPlus, IconTrash } from "../components/
 
 const LIAB_META: Record<LiabilityCategory, { label: string }> = {
   emprunt_immo: { label: "Emprunt immobilier" },
-  credit_conso: { label: "Crédit conso" },
-  credit_auto: { label: "Crédit auto" },
-  dette: { label: "Dette" },
+  credit: { label: "Crédit" },
   autre: { label: "Autre" },
 };
 
@@ -600,7 +598,7 @@ function LiabilityModal({
   );
 
   const auto = draft.autoPayment ?? true;
-  const isLoan = draft.category === "emprunt_immo" || draft.category === "credit_conso" || draft.category === "credit_auto";
+  const isLoan = draft.category === "emprunt_immo" || draft.category === "credit";
   const computed = monthlyPayment(draft.outstanding, draft.rate ?? 0, draft.termMonths ?? 0);
 
   const termInput = unit === "years" ? (draft.termMonths ?? 0) / 12 : draft.termMonths ?? 0;

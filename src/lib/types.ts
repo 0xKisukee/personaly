@@ -76,7 +76,6 @@ export function flowBounds(
  */
 export type AssetCategory =
   | "immobilier"
-  | "compte_courant"
   | "liquidites"
   | "epargne"
   | "vehicule"
@@ -93,7 +92,7 @@ export type AssetCategory =
  *       • livret dont les intérêts restent : +X%
  *       • immobilier qui s'apprécie        : +2%
  *       • véhicule qui se déprécie          : -15%  (négatif)
- *       • compte courant stable             :  0
+ *       • liquidités stables                 :  0
  *     N'alimente PAS les flux entrants — le gain n'est pas perçu, il s'accumule.
  *
  *  2. REVENU DISTRIBUÉ — versé en FLUX entrant, NE se compose PAS.
@@ -144,7 +143,7 @@ export interface Asset {
 }
 
 /** Catégories d'actifs pouvant recevoir des versements (surplus d'épargne). */
-export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["compte_courant", "epargne"];
+export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["epargne"];
 
 export function canReceiveDeposits(a: Pick<Asset, "category">): boolean {
   return DEPOSIT_ELIGIBLE.includes(a.category);
@@ -152,9 +151,7 @@ export function canReceiveDeposits(a: Pick<Asset, "category">): boolean {
 
 export type LiabilityCategory =
   | "emprunt_immo"
-  | "credit_conso"
-  | "credit_auto"
-  | "dette"
+  | "credit"
   | "autre";
 
 /**

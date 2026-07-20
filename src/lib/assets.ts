@@ -14,7 +14,6 @@ import type { FC } from "react";
 import type { Asset, AssetCategory } from "./types";
 import { canReceiveDeposits } from "./types";
 import {
-  IconBank,
   IconBox,
   IconCar,
   IconChart,
@@ -91,17 +90,6 @@ export const ASSET_TYPES: Record<AssetCategory, AssetType> = {
     help: "Un bien peut s'apprécier (croissance capitalisée) ET rapporter un loyer (revenu distribué) s'il est loué.",
   },
 
-  compte_courant: {
-    id: "compte_courant",
-    label: "Compte courant",
-    icon: IconBank,
-    accent: "var(--sage-deep)",
-    fields: ["deposits"],
-    defaultVolatility: 0,
-    presets: [{ label: "Compte chèque", patch: { growthRate: 0, incomeMode: "none" } }],
-    help: "Liquidités disponibles. Peut recevoir le surplus d'épargne de la projection.",
-  },
-
   liquidites: {
     id: "liquidites",
     label: "Liquidités",
@@ -109,8 +97,11 @@ export const ASSET_TYPES: Record<AssetCategory, AssetType> = {
     accent: "var(--brass-bright)",
     fields: [],
     defaultVolatility: 0,
-    presets: [{ label: "Espèces", patch: { growthRate: 0, incomeMode: "none" } }],
-    help: "Argent liquide (espèces). Ne croît pas et ne reçoit pas de versements.",
+    presets: [
+      { label: "Compte courant", patch: { growthRate: 0, incomeMode: "none" } },
+      { label: "Espèces", patch: { growthRate: 0, incomeMode: "none" } },
+    ],
+    help: "Liquidités disponibles (compte courant, espèces). Ne croît pas et ne reçoit pas de versements.",
   },
 
   epargne: {
@@ -163,7 +154,6 @@ export const ASSET_TYPES: Record<AssetCategory, AssetType> = {
 export const ASSET_CATEGORIES: AssetCategory[] = [
   "immobilier",
   "epargne",
-  "compte_courant",
   "liquidites",
   "vehicule",
   "autre",

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -37,6 +37,10 @@ function loadProjection(raw: object | undefined): ProjectionParams {
 const CATEGORY_MIGRATION: Record<string, AssetCategory> = {
   livret_epargne: "epargne",
   placement: "epargne",
+  // `compte_courant` fusionne dans `liquidites` (décision : « c'est la même
+  // chose »). Perd l'éligibilité aux versements — c'était l'anomalie du compte
+  // courant ; les liquidités ne reçoivent pas de surplus.
+  compte_courant: "liquidites",
 };
 
 /** Purge les clés d'actifs héritées (valuationRate) et migre les catégories. */
@@ -48,6 +52,26 @@ function normalizeAssets(raw: unknown): Asset[] {
     const category = CATEGORY_MIGRATION[rest.category as string] ?? rest.category;
     return { ...rest, category };
   }) as Asset[];
+}
+
+/**
+ * Migration des catégories de passifs (taxonomie simplifiée) : `credit_conso` et
+ * `credit_auto` fusionnent dans `credit` (crédits amortissables) ; `dette` (non
+ * amortissable) retombe sur `autre`. Rien n'est perdu (montants/taux conservés).
+ */
+const LIABILITY_CATEGORY_MIGRATION: Record<string, LiabilityCategory> = {
+  credit_conso: "credit",
+  credit_auto: "credit",
+  dette: "autre",
+};
+
+/** Migre les catégories de passifs héritées vers la taxonomie courante. */
+function normalizeLiabilities(raw: unknown): Liability[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((l: Liability) => {
+    const category = LIABILITY_CATEGORY_MIGRATION[l.category as string] ?? l.category;
+    return { ...l, category };
+  }) as Liability[];
 }
 
 /**
@@ -88,7 +112,7 @@ export function migrateState(input: unknown): AppState {
       ...EMPTY_STATE,
       profile: parsed.profile ?? EMPTY_STATE.profile,
       assets: normalizeAssets(parsed.assets),
-      liabilities: parsed.liabilities ?? [],
+      liabilities: normalizeLiabilities(parsed.liabilities),
       incomes: parsed.incomes ?? [],
       expenses: parsed.expenses ?? [],
       plans: [plan],
@@ -112,7 +136,7 @@ export function migrateState(input: unknown): AppState {
   const activePlanId = plans.some((pl) => pl.id === parsed.activePlanId)
     ? parsed.activePlanId
     : plans[0].id;
-  return { ...EMPTY_STATE, ...parsed, assets: normalizeAssets(parsed.assets), plans, activePlanId };
+  return { ...EMPTY_STATE, ...parsed, assets: normalizeAssets(parsed.assets), liabilities: normalizeLiabilities(parsed.liabilities), plans, activePlanId };
 }
 
 /** Charge l'état depuis le localStorage (via `migrateState`). Exporté pour les tests. */

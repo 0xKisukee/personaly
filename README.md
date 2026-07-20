@@ -179,8 +179,8 @@ C'est **la** distinction centrale du modèle :
 
 Un même actif peut cumuler les deux (appartement loué : +2 %/an de valeur ET un loyer).
 
-**Versements (projection)** : les actifs « liquides » (`compte_courant`, `livret_epargne`,
-`placement` — voir `canReceiveDeposits()`) peuvent recevoir le **surplus d'épargne** de la
+**Versements (projection)** : les actifs d'`epargne` (voir `canReceiveDeposits()`)
+peuvent recevoir le **surplus d'épargne** de la
 projection. `depositCap` = plafond de **dépôts cumulés** (ex. 150 000 € pour un PEA),
 `depositsMade` = versements déjà effectués. Le plafond porte sur les dépôts, pas sur la
 valeur : la croissance peut le dépasser, seuls les versements s'arrêtent.
@@ -249,7 +249,7 @@ de vie ne sont plus ici : ils sont propres à chaque plan et s'éditent dans l'o
 
 ### 02 — Patrimoine
 - **Hero** : Patrimoine net = Brut − Passifs.
-- **Actifs** : catégories (immobilier, compte courant, livret, placement, véhicule,
+- **Actifs** : catégories (immobilier, épargne & placements, liquidités, véhicule,
   autre). Modale avec les deux blocs distincts *Croissance capitalisée* et
   *Revenu distribué*.
 - **Passifs** : emprunts (taux, durée, mensualité auto) et dettes simples.

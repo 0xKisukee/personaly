@@ -22,8 +22,8 @@ describe("registre de types d'actifs", () => {
   });
 
   it("normalizeAsset coupe le revenu quand la catégorie ne l'expose pas", () => {
-    // compte courant : aucun revenu distribué
-    expect(normalizeAsset(asset({ category: "compte_courant", incomeMode: "amount" })).incomeMode).toBe("none");
+    // liquidités : aucun revenu distribué
+    expect(normalizeAsset(asset({ category: "liquidites", incomeMode: "amount" })).incomeMode).toBe("none");
     // immobilier NON loué : revenu coupé
     expect(normalizeAsset(asset({ category: "immobilier", rented: false, incomeMode: "amount" })).incomeMode).toBe("none");
     // immobilier loué : revenu conservé
@@ -43,9 +43,8 @@ describe("registre de types d'actifs", () => {
     expect(collection.growthRate).toBe(4); // pas de restriction de signe
   });
 
-  it("canReceiveDeposits : epargne & compte oui, immobilier/liquidités non", () => {
+  it("canReceiveDeposits : epargne oui, immobilier/liquidités non", () => {
     expect(canReceiveDeposits({ category: "epargne" })).toBe(true);
-    expect(canReceiveDeposits({ category: "compte_courant" })).toBe(true);
     expect(canReceiveDeposits({ category: "immobilier" })).toBe(false);
     expect(canReceiveDeposits({ category: "liquidites" })).toBe(false);
   });
