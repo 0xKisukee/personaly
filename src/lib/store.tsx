@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, EMPTY_STATE, type AppState, type Asset, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -29,13 +29,24 @@ function loadProjection(raw: object | undefined): ProjectionParams {
   return projection;
 }
 
-/** Purge les clés d'actifs héritées (valuationRate, renommée growthRate). */
+/**
+ * Migration des catégories d'actifs (taxonomie enrichie) : livrets et placements
+ * fusionnent dans `epargne` (décision : « c'est la même chose »). Rien n'est perdu —
+ * `epargne` reste éligible aux versements, les plafonds/valeurs sont conservés.
+ */
+const CATEGORY_MIGRATION: Record<string, AssetCategory> = {
+  livret_epargne: "epargne",
+  placement: "epargne",
+};
+
+/** Purge les clés d'actifs héritées (valuationRate) et migre les catégories. */
 function normalizeAssets(raw: unknown): Asset[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((a: Asset & { valuationRate?: number }) => {
     const { valuationRate: _legacy, ...rest } = a;
     void _legacy;
-    return rest;
+    const category = CATEGORY_MIGRATION[rest.category as string] ?? rest.category;
+    return { ...rest, category };
   }) as Asset[];
 }
 

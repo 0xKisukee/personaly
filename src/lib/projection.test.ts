@@ -22,7 +22,7 @@ afterAll(() => vi.useRealTimers());
 /* ------------------------------ helpers ------------------------------ */
 
 const asset = (over: Partial<Asset>): Asset => ({
-  id: "a", label: "A", category: "placement", value: 0, growthRate: 0, incomeMode: "none", ...over,
+  id: "a", label: "A", category: "epargne", value: 0, growthRate: 0, incomeMode: "none", ...over,
 });
 const loan = (over: Partial<Liability>): Liability => ({
   id: "l", label: "Prêt", category: "emprunt_immo", outstanding: 0, ...over,
@@ -257,8 +257,8 @@ describe("épargne", () => {
 describe("cascade d'affectation du surplus", () => {
   const twoTargets = state({
     assets: [
-      asset({ id: "liv", label: "Livret", category: "livret_epargne", value: 20_000, depositCap: 25_000, depositsMade: 20_000 }),
-      asset({ id: "pea", label: "PEA", category: "placement", value: 10_000, depositCap: 18_000, depositsMade: 10_000 }),
+      asset({ id: "liv", label: "Livret", category: "epargne", value: 20_000, depositCap: 25_000, depositsMade: 20_000 }),
+      asset({ id: "pea", label: "PEA", category: "epargne", value: 10_000, depositCap: 18_000, depositsMade: 10_000 }),
     ],
     incomes: [{ id: "i", label: "S", category: "salaire", amount: 2_000, period: "monthly" }],
     expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_000, period: "monthly" }],
@@ -721,8 +721,8 @@ describe("flux récurrents (événement kind flow)", () => {
 describe("cascade de retrait (décumulation)", () => {
   const base = state({
     assets: [
-      asset({ id: "liv", label: "Livret", category: "livret_epargne", value: 5_000 }),
-      asset({ id: "pea", label: "PEA", category: "placement", value: 50_000 }),
+      asset({ id: "liv", label: "Livret", category: "epargne", value: 5_000 }),
+      asset({ id: "pea", label: "PEA", category: "epargne", value: 50_000 }),
     ],
     expenses: [{ id: "e", label: "Vie", category: "vie_courante", amount: 1_000, period: "monthly" }],
   });
@@ -789,10 +789,10 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
       assets: [
         asset({ id: "rp", label: "RP", category: "immobilier", value: 250_000, growthRate: 2, charges: { amount: 2_800, period: "yearly" } }),
         asset({ id: "locatif", label: "Locatif", category: "immobilier", value: 150_000, growthRate: 1.5, incomeMode: "amount", income: { amount: 650, period: "monthly" }, charges: { amount: 1_900, period: "yearly" } }),
-        asset({ id: "pea", label: "PEA", category: "placement", value: 30_000, growthRate: 6, depositCap: 150_000, depositsMade: 40_000 }),
-        asset({ id: "livret", label: "Livret", category: "livret_epargne", value: 22_000, growthRate: 2.4, depositCap: 22_950, depositsMade: 22_000 }),
+        asset({ id: "pea", label: "PEA", category: "epargne", value: 30_000, growthRate: 6, depositCap: 150_000, depositsMade: 40_000 }),
+        asset({ id: "livret", label: "Livret", category: "epargne", value: 22_000, growthRate: 2.4, depositCap: 22_950, depositsMade: 22_000 }),
         asset({ id: "car", label: "Voiture", category: "vehicule", value: 18_000, growthRate: -12, valueFloor: 3_000 }),
-        asset({ id: "cto", label: "CTO", category: "placement", value: 5_000, growthRate: 5, incomeMode: "rate", incomeRate: 2 }),
+        asset({ id: "cto", label: "CTO", category: "epargne", value: 5_000, growthRate: 5, incomeMode: "rate", incomeRate: 2 }),
       ],
       liabilities: [
         loan({ id: "l-rp", label: "Prêt RP", outstanding: 120_000, rate: 3.2, termMonths: 240, monthlyPayment: pmt, insurance: 28 }),

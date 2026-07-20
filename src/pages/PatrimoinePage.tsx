@@ -8,7 +8,14 @@ import type {
   LiabilityCategory,
   Period,
 } from "../lib/types";
-import { canReceiveDeposits } from "../lib/types";
+import {
+  ASSET_CATEGORIES,
+  assetType,
+  hasField,
+  emptyAssetOf,
+  normalizeAsset,
+  type AssetPreset,
+} from "../lib/assets";
 import {
   assetYearlyIncome,
   assetYearlyNet,
@@ -20,27 +27,7 @@ import { money, signedMoney, percent, uid, toYearly } from "../lib/format";
 import { monthlyPayment, formatDuration, formatEndDate } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
-import {
-  IconBank,
-  IconBox,
-  IconCar,
-  IconChart,
-  IconDebt,
-  IconEdit,
-  IconHome,
-  IconPlus,
-  IconSavings,
-  IconTrash,
-} from "../components/icons";
-
-const ASSET_META: Record<AssetCategory, { label: string; icon: React.FC<{ size?: number }> }> = {
-  immobilier: { label: "Immobilier", icon: IconHome },
-  compte_courant: { label: "Compte courant", icon: IconBank },
-  livret_epargne: { label: "Livret d'épargne", icon: IconSavings },
-  placement: { label: "Placement", icon: IconChart },
-  vehicule: { label: "Véhicule", icon: IconCar },
-  autre: { label: "Autre", icon: IconBox },
-};
+import { IconBox, IconDebt, IconEdit, IconPlus, IconTrash } from "../components/icons";
 
 const LIAB_META: Record<LiabilityCategory, { label: string }> = {
   emprunt_immo: { label: "Emprunt immobilier" },
@@ -50,16 +37,7 @@ const LIAB_META: Record<LiabilityCategory, { label: string }> = {
   autre: { label: "Autre" },
 };
 
-const emptyAsset = (): Asset => ({
-  id: uid(),
-  label: "",
-  category: "immobilier",
-  value: 0,
-  growthRate: 0,
-  incomeMode: "none",
-  incomeRate: 0,
-  income: { amount: 0, period: "monthly" },
-});
+const emptyAsset = (): Asset => emptyAssetOf("immobilier", uid());
 
 const emptyLiab = (): Liability => ({
   id: uid(),
@@ -83,7 +61,9 @@ export default function PatrimoinePage() {
   // revenu NET (revenus distribués − charges de détention) : le vrai bénéfice du patrimoine
   const yearlyNet = state.assets.reduce((s, a) => s + assetYearlyNet(a), 0);
 
-  const saveAsset = (a: Asset) => {
+  const saveAsset = (raw: Asset) => {
+    // coupe les champs qu'une catégorie n'expose pas (revenu d'un immo « non loué »…)
+    const a = normalizeAsset(raw);
     update((s) => {
       const exists = s.assets.some((x) => x.id === a.id);
       return {
@@ -170,7 +150,7 @@ export default function PatrimoinePage() {
         ) : (
           <div className="rows">
             {state.assets.map((a, i) => {
-              const Meta = ASSET_META[a.category];
+              const Meta = assetType(a.category);
               const inc = assetYearlyIncome(a);
               const chg = toYearly(a.charges);
               const net = inc - chg; // bénéfice réel de détention
@@ -322,11 +302,28 @@ function AssetModal({
   onClose: () => void;
 }) {
   const set = (patch: Partial<Asset>) => onChange({ ...draft, ...patch });
+  const t = assetType(draft.category);
+  const show = (f: Parameters<typeof hasField>[1]) => hasField(draft.category, f);
   const modes: { id: Asset["incomeMode"]; label: string }[] = [
     { id: "none", label: "Aucun" },
     { id: "rate", label: "Taux %" },
     { id: "amount", label: "Montant" },
   ];
+
+  // changer de catégorie normalise les champs comportementaux non exposés
+  const setCategory = (category: AssetCategory) =>
+    onChange(normalizeAsset({ ...draft, category }));
+  const applyPreset = (p: AssetPreset) => onChange({ ...draft, ...p.patch });
+  // bascule loué : révèle/masque le revenu (immobilier)
+  const setRented = (rented: boolean) =>
+    onChange({
+      ...draft,
+      rented,
+      incomeMode: rented ? (draft.incomeMode === "none" ? "amount" : draft.incomeMode) : "none",
+    });
+
+  // le revenu s'affiche si la catégorie l'expose (et, pour l'immobilier, si loué)
+  const showIncome = show("income") && (!show("rented") || draft.rented === true);
 
   return (
     <Modal
@@ -351,10 +348,10 @@ function AssetModal({
           <select
             className="select"
             value={draft.category}
-            onChange={(e) => set({ category: e.target.value as AssetCategory })}
+            onChange={(e) => setCategory(e.target.value as AssetCategory)}
           >
-            {Object.entries(ASSET_META).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
+            {ASSET_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{assetType(c).label}</option>
             ))}
           </select>
         </div>
@@ -369,7 +366,34 @@ function AssetModal({
           />
         </div>
 
+        {/* --- Presets (pré-remplissage en un clic) --- */}
+        {t.presets.length > 0 && (
+          <div className="field span-2">
+            <label>Modèles — {t.label}</label>
+            <div className="preset-row">
+              {t.presets.map((p) => (
+                <button key={p.label} type="button" className="preset-chip" title={p.hint} onClick={() => applyPreset(p)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <span className="help">{t.help}</span>
+          </div>
+        )}
+
+        {/* --- Immobilier : bascule loué --- */}
+        {show("rented") && (
+          <div className="field span-2">
+            <label>Ce bien est-il loué ?</label>
+            <div className="segment">
+              <button data-on={draft.rented === true} onClick={() => setRented(true)}>Loué (rapporte un loyer)</button>
+              <button data-on={!draft.rented} onClick={() => setRented(false)}>Non loué</button>
+            </div>
+          </div>
+        )}
+
         {/* --- Bloc 1 : croissance capitalisée --- */}
+        {show("growth") && (
         <div className="span-2 form-block">
           <div className="block-title">
             <span className="dot sage" /> Croissance de la valeur · <span className="block-tag">capitalisée</span>
@@ -385,9 +409,10 @@ function AssetModal({
               onChange={(e) => set({ growthRate: Number(e.target.value) })}
             />
             <span className="help">
-              Le gain reste dans l'actif et <b>se compose</b> dans la projection. Négatif pour un bien qui se déprécie.
+              Le gain reste dans l'actif et <b>se compose</b> dans la projection. Négatif pour un bien qui se déprécie, positif pour un bien qui s'apprécie.
             </span>
           </div>
+          {show("volatility") && (
           <div className="field" style={{ marginTop: 12 }}>
             <label>Volatilité (%/an) — optionnel</label>
             <input
@@ -403,7 +428,8 @@ function AssetModal({
               La projection déterministe n'en tient pas compte. Vide = rendement certain.
             </span>
           </div>
-          {draft.growthRate < 0 && (
+          )}
+          {show("floor") && draft.growthRate < 0 && (
             <div className="field" style={{ marginTop: 12 }}>
               <label>Valeur plancher (€) — optionnel</label>
               <input
@@ -417,8 +443,10 @@ function AssetModal({
             </div>
           )}
         </div>
+        )}
 
         {/* --- Bloc 2 : revenu distribué --- */}
+        {showIncome && (
         <div className="span-2 form-block">
           <div className="block-title">
             <span className="dot gain" /> Revenu distribué · <span className="block-tag">flux entrant</span>
@@ -474,8 +502,10 @@ function AssetModal({
             Le gain est <b>perçu en cash</b> (loyer, dividende) : il alimente les flux et reste <b>à plat</b>, sans se composer.
           </span>
         </div>
+        )}
 
         {/* --- Bloc 3 : charges récurrentes --- */}
+        {show("charges") && (
         <div className="span-2 form-block">
           <div className="block-title">
             <span className="dot drain" /> Charges récurrentes · <span className="block-tag">flux sortant</span>
@@ -503,9 +533,10 @@ function AssetModal({
             Coûts de détention (taxe foncière, charges de copro, assurance PNO…). Déduits des flux, ils permettent le rendement net.
           </span>
         </div>
+        )}
 
         {/* --- Bloc 4 : versements (surplus de la projection) --- */}
-        {canReceiveDeposits(draft) && (
+        {show("deposits") && (
           <div className="span-2 form-block">
             <div className="block-title">
               <span className="dot brass" /> Versements · <span className="block-tag">projection</span>

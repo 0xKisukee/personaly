@@ -14,7 +14,7 @@ beforeAll(() => {
 afterAll(() => vi.useRealTimers());
 
 const asset = (over: Partial<Asset>): Asset => ({
-  id: "a", label: "A", category: "placement", value: 0, growthRate: 0, incomeMode: "none", ...over,
+  id: "a", label: "A", category: "epargne", value: 0, growthRate: 0, incomeMode: "none", ...over,
 });
 const state = (over: Partial<SimState>): SimState => ({
   profile: { firstName: "T", birthDate: "1995-05-01" },

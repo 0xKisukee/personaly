@@ -1,15 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useStore } from "../../lib/store";
-import type { Asset, AssetCategory, ProjectionParams, SimState } from "../../lib/types";
+import type { Asset, ProjectionParams, SimState } from "../../lib/types";
 import type { YearPoint } from "../../lib/projection";
+import { DEFAULT_VOLATILITY } from "../../lib/assets";
 import { runMonteCarlo, type MonteCarloBand } from "../../lib/montecarlo";
 import { money } from "../../lib/format";
 import { compactEur, timeFractions, nearestIndex } from "./chartUtils";
-
-const DEFAULT_VOL: Record<AssetCategory, number> = {
-  placement: 15, immobilier: 8, autre: 5, livret_epargne: 0, compte_courant: 0, vehicule: 0,
-};
 
 /** Vue Probabilité : Monte Carlo (jauge de succès + éventail de percentiles). */
 export default function MonteCarloView({ projState, params, detPoints, eligibleAssets }: {
@@ -32,7 +29,7 @@ export default function MonteCarloView({ projState, params, detPoints, eligibleA
     update((st) => ({
       ...st,
       assets: st.assets.map((a) =>
-        a.volatility == null && DEFAULT_VOL[a.category] > 0 ? { ...a, volatility: DEFAULT_VOL[a.category] } : a
+        a.volatility == null && DEFAULT_VOLATILITY[a.category] > 0 ? { ...a, volatility: DEFAULT_VOLATILITY[a.category] } : a
       ),
     }));
 

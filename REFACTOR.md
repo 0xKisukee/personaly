@@ -591,9 +591,9 @@ Historique conservé — question → **ta réponse** → décision appliquée d
 Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 
 **Reprise rapide**
-- **Dernière session :** ✅ **Phase 0 + Phase 1 (structurel)** terminées. `index.css` éclaté en `styles/*` (split **iso-visuel** prouvé : bundle CSS identique au bit près), primitives `ui/*` créées + `MoneyInput`, **Profil migré (pilote)**. Build + 118 tests verts, dev server OK.
-- **Prochaine étape :** Phase 2 — Taxonomie d'actifs (`epargne`/`liquidites`, flag `rented`, registre `lib/assets.ts`, presets, migration store). ⚠️ phase la plus risquée. Avant : **choisir la direction de design §12** (défaut D1) si on veut restyler, sinon on reste iso-visuel.
-- **Branche en cours :** `main` (Phases 0 + 1 en working tree, **pas encore committées** — 2 commits séparés conseillés : « split CSS pur » puis « primitives + Profil »).
+- **Dernière session :** ✅ **Phase 2 (Taxonomie d'actifs)** terminée. Nouvelles catégories (`epargne` = fusion livret+placement, `liquidites`), flag `rented` (immobilier), registre `lib/assets.ts` (méta + presets + champs par type + `normalizeAsset`), `AssetModal` piloté par le registre (presets, bascule loué, blocs conditionnels), migration store, EventModal/eventHelpers/MonteCarloView reliés au registre. Build + **125 tests** verts (dont invariants taxonomie), boot OK.
+- **Prochaine étape :** Phase 3 — Langage couleur de performance (métrique `assetPerformance`, tokens divergents, `PerformanceBadge`, `Sparkline`). ⚠️ **`--gain`/`--drain` = performance réelle par actif**, jamais l'identité de catégorie (déjà corrigé dans les accents du registre).
+- **Branche en cours :** `main` (Phases 0+1 committées ; **Phase 2 en working tree, pas encore committée**).
 
 **État par phase**
 
@@ -601,7 +601,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 |---|---|---|
 | 0 — Socle (routeur, export/import, garde-fous) | ✅ | `react-router-dom` (BrowserRouter) ; `routes.tsx` ; `migrateState`/`serializeState`/`importState` ; contrôles données + indicateur « Enregistré » en sidebar ; vue Projection portée par `/projection/:vue`. |
 | 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ✅ (structurel) | `styles/{tokens,base,primitives,layout,charts}.css` (split contigu iso-visuel) ; `ui/{Button,Input,MoneyInput,Field,Select,Segment,Card,Tag}` + barrel ; Profil migré. **Reste optionnel :** `Stat`/`Tooltip`/`Row` + déplacer `Modal`→`ui/` (différés en phase 5, avec vrais consommateurs) ; rafraîchissement de palette §12 (non appliqué, on est resté iso-visuel). |
-| 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ⬜ | phase la plus risquée |
+| 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
 | 3 — Couleur de performance | ⬜ | — |
 | 4 — Dashboard | ⬜ | — |
 | 5 — Refonte pages (Patrimoine → Flux → Projection) | ⬜ | — |
@@ -610,6 +610,11 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
+- **Accents de catégorie = identité neutre, jamais perf.** Un actif d'une catégorie « à
+  risque » n'est pas mauvais par nature (voiture de collection qui s'apprécie, immo qui se
+  déprécie). `--gain`/`--drain` sont réservés au **langage de performance par actif** (phase 3).
+- **`normalizeAsset` à l'enregistrement** : garantit que le moteur ne voit pas de champ
+  caché (loyer d'un immo « non loué », croissance d'un compte courant…). Invariant testé.
 - **Routeur = `BrowserRouter`** (URLs propres `/patrimoine`). Vite (dev + preview) fournit
   le fallback SPA. ⚠️ Si un jour on sert le build en statique (GitHub Pages…) sans fallback,
   basculer en `HashRouter` (1 ligne dans `App.tsx`) pour éviter les 404 au refresh.
@@ -619,6 +624,21 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-20 — Phase 2 (Taxonomie d'actifs).** Modèle (`types.ts`) : `AssetCategory`
+  refondu (`epargne` = fusion `livret_epargne`+`placement` ; `liquidites` neuf), flag
+  `rented?` sur `Asset`, `DEPOSIT_ELIGIBLE = [compte_courant, epargne]`. Registre
+  `lib/assets.ts` : par catégorie → label, icône, **accent d'IDENTITÉ (neutre)**, champs
+  affichés, `canDeposit`, `presets` (Livret A/LDDS/PEL/PEA/CTO/AV/PER/ETF ; RP/Locatif ;
+  Voiture/Voiture de collection), `defaultVolatility`, + `normalizeAsset()` (coupe les
+  champs comportementaux non exposés → pas de loyer fantôme). `AssetModal` (PatrimoinePage)
+  piloté par le registre : select+presets, bascule **loué**, blocs conditionnels par
+  `hasField`, normalisation à l'enregistrement. Migration store `normalizeAssets` (remap
+  catégorie, plafonds préservés). Consommateurs reliés au registre : `eventHelpers`
+  (`assetLabel`), `EventModal` (select achat), `MonteCarloView` (`DEFAULT_VOLATILITY`).
+  Tests : `assets.test.ts` (invariants) + migration store + littéraux de test migrés →
+  **125 verts**. **Correction suite retour utilisateur :** les accents de catégorie
+  n'utilisent PLUS `--gain`/`--drain` (un véhicule peut s'apprécier, un immo se déprécier) ;
+  `--gain`/`--drain` restent réservés à la perf réelle par actif (phase 3).
 - **2026-07-20 — Phase 1 (structurel).** `index.css` (1665 l.) éclaté en 5 modules
   `styles/*` par **découpage contigu** (ranges 1–54 / 55–143 / 144–311 / 312–918 / 919–fin)
   importés dans l'ordre par `main.tsx` → cascade **identique** (concat == original vérifié

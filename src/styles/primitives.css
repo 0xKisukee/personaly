@@ -26,6 +26,29 @@
   pointer-events: none;
 }
 
+/* presets d'actif : puces de pré-remplissage en un clic */
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.preset-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line-brass);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.preset-chip:hover {
+  color: var(--ink);
+  border-color: var(--brass);
+  background: rgba(203, 169, 107, 0.08);
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

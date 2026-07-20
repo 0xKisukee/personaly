@@ -1,9 +1,10 @@
 import type { AssetCategory, PlannedEvent } from "../../lib/types";
 import { eventYear } from "../../lib/types";
+import { ASSET_CATEGORIES, assetLabel } from "../../lib/assets";
 import Modal from "../../components/Modal";
 import WhenPicker from "../../components/WhenPicker";
 import {
-  type AppStateLike, CAT_LABELS, EVENT_KINDS, switchKind,
+  type AppStateLike, EVENT_KINDS, switchKind,
   sellableAssets, repayableLoans, depositableAssets,
 } from "./eventHelpers";
 
@@ -149,7 +150,7 @@ export default function EventModal({ draft, s, onChange, onSave, onClose }: {
               <label>Catégorie de l'actif</label>
               <select className="select" value={draft.asset.category}
                 onChange={(e) => set({ asset: { ...draft.asset, category: e.target.value as AssetCategory } })}>
-                {Object.entries(CAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{assetLabel(c)}</option>)}
               </select>
             </div>
             <div className="field">

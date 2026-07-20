@@ -5,13 +5,9 @@
  */
 import type { AssetCategory, Milestone, PlannedEvent } from "../../lib/types";
 import { canReceiveDeposits, eventYear } from "../../lib/types";
+import { assetLabel } from "../../lib/assets";
 import { money, signedMoney, percent, uid, whenLabel } from "../../lib/format";
 import { formatDuration } from "../../lib/finance";
-
-export const CAT_LABELS: Record<AssetCategory, string> = {
-  immobilier: "Immobilier", compte_courant: "Compte courant", livret_epargne: "Livret d'épargne",
-  placement: "Placement", vehicule: "Véhicule", autre: "Autre",
-};
 
 export const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
   { id: "flow", label: "Flux récurrent" },
@@ -87,7 +83,7 @@ export function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
       return `Flux ${ev.direction === "in" ? "entrant" : "sortant"} · ${ev.direction === "in" ? "+" : "−"}${money(ev.amount)}${per}${endTxt ? ` jusqu'à ${endTxt}` : ""}`;
     }
     case "buy":
-      return `Achat · ${money(ev.price)}${ev.fees ? ` + ${money(ev.fees)} de frais` : ""} · ${CAT_LABELS[ev.asset.category]}${ev.asset.growthRate ? ` ${ev.asset.growthRate > 0 ? "+" : ""}${percent(ev.asset.growthRate)}/an` : ""}`;
+      return `Achat · ${money(ev.price)}${ev.fees ? ` + ${money(ev.fees)} de frais` : ""} · ${assetLabel(ev.asset.category)}${ev.asset.growthRate ? ` ${ev.asset.growthRate > 0 ? "+" : ""}${percent(ev.asset.growthRate)}/an` : ""}`;
     case "sell": {
       const label = sellableAssets(s).find((a) => a.id === ev.assetId)?.label ?? "actif inconnu";
       return `Vente de ${label} · ${ev.price != null ? money(ev.price) : "à la valeur projetée"}${ev.feesPct ? ` · frais ${percent(ev.feesPct)}` : ""}`;

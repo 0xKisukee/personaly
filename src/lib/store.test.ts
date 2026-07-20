@@ -10,7 +10,7 @@ vi.stubGlobal("localStorage", {
 });
 
 import { loadState, migrateState, serializeState } from "./store";
-import { EMPTY_STATE } from "./types";
+import { EMPTY_STATE, canReceiveDeposits } from "./types";
 
 const KEY = "personaly:v1";
 const write = (state: object) => mem.set(KEY, JSON.stringify(state));
@@ -107,6 +107,23 @@ describe("loadState", () => {
     expect(s.plans).toHaveLength(1);
     expect(s.activePlanId).toBe(s.plans[0].id);
   });
+
+  it("migre la taxonomie d'actifs : livret_epargne & placement → epargne (versements préservés)", () => {
+    write({
+      assets: [
+        { id: "liv", label: "Livret A", category: "livret_epargne", value: 20000, growthRate: 2.4, depositCap: 22950, incomeMode: "none" },
+        { id: "pea", label: "PEA", category: "placement", value: 30000, growthRate: 6, depositCap: 150000, incomeMode: "none" },
+        { id: "rp", label: "Maison", category: "immobilier", value: 250000, growthRate: 2, incomeMode: "none" },
+      ],
+      plans: [{ id: "p1", name: "P", projection: {} }],
+      activePlanId: "p1",
+    });
+    const s = loadState();
+    expect(s.assets.map((a) => a.category)).toEqual(["epargne", "epargne", "immobilier"]);
+    expect(s.assets[0].depositCap).toBe(22950); // plafond conservé
+    expect(canReceiveDeposits(s.assets[0])).toBe(true); // epargne reste éligible
+    expect(canReceiveDeposits(s.assets[2])).toBe(false); // immobilier non éligible
+  });
 });
 
 describe("export / import (round-trip)", () => {
@@ -114,7 +131,7 @@ describe("export / import (round-trip)", () => {
     const state = {
       ...EMPTY_STATE,
       profile: { firstName: "Camille", birthDate: "1990-05-01" },
-      assets: [{ id: "a", label: "PEA", category: "placement" as const, value: 50000, growthRate: 6, incomeMode: "none" as const }],
+      assets: [{ id: "a", label: "PEA", category: "epargne" as const, value: 50000, growthRate: 6, incomeMode: "none" as const }],
       liabilities: [{ id: "l", label: "Prêt", category: "emprunt_immo" as const, outstanding: 120000 }],
       plans: [{ ...EMPTY_STATE.plans[0], projection: { ...EMPTY_STATE.plans[0].projection, horizon: 25 } }],
     };

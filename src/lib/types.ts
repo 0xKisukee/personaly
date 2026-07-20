@@ -68,11 +68,17 @@ export function flowBounds(
 
 /* --------------------------- PATRIMOINE --------------------------- */
 
+/**
+ * Catégories d'actifs. La FINESSE produit (Livret A vs PEA vs assurance-vie…) est
+ * portée par les PRESETS du registre `lib/assets.ts`, pas par des catégories dédiées :
+ *  - `epargne` fusionne livrets ET placements (décision : « c'est la même chose »).
+ *  - l'immobilier est un seul type ; le flag `rented` distingue loué / non loué.
+ */
 export type AssetCategory =
   | "immobilier"
   | "compte_courant"
-  | "livret_epargne"
-  | "placement"
+  | "liquidites"
+  | "epargne"
   | "vehicule"
   | "autre";
 
@@ -117,6 +123,10 @@ export interface Asset {
   incomeRate?: number; // % de la valeur versé/an, si incomeMode === "rate"
   income?: MoneyFlow; // montant fixe distribué, si incomeMode === "amount"
 
+  // bien immobilier LOUÉ : révèle le revenu distribué (loyer) sans changer de catégorie.
+  // Bascule loué/non loué instantanée. Ignoré hors `immobilier`.
+  rented?: boolean;
+
   // 3. charges récurrentes de l'actif (taxe foncière, copro, assurance PNO…) — flux sortant
   charges?: MoneyFlow;
 
@@ -134,7 +144,7 @@ export interface Asset {
 }
 
 /** Catégories d'actifs pouvant recevoir des versements (surplus d'épargne). */
-export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["compte_courant", "livret_epargne", "placement"];
+export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["compte_courant", "epargne"];
 
 export function canReceiveDeposits(a: Pick<Asset, "category">): boolean {
   return DEPOSIT_ELIGIBLE.includes(a.category);

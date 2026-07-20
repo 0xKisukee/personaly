@@ -14,7 +14,7 @@ import { monthlyPayment } from "./finance";
 const Y = new Date().getFullYear();
 
 const asset = (over: Partial<Asset>): Asset => ({
-  id: "a", label: "A", category: "placement", value: 0, growthRate: 0, incomeMode: "none", ...over,
+  id: "a", label: "A", category: "epargne", value: 0, growthRate: 0, incomeMode: "none", ...over,
 });
 const state = (over: Partial<AppState>): AppState => ({
   profile: { firstName: "", birthDate: "" },
