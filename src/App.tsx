@@ -1,31 +1,44 @@
-import { useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { StoreProvider } from "./lib/store";
-import Sidebar, { type RouteId } from "./components/Sidebar";
+import { DEFAULT_PATH } from "./routes";
+import Sidebar from "./components/Sidebar";
 import ProfilPage from "./pages/ProfilPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
 import FluxPage from "./pages/FluxPage";
 import ProjectionPage from "./pages/ProjectionPage";
 
-function Router() {
-  const [route, setRoute] = useState<RouteId>("patrimoine");
+/** Clé de transition = 1er segment du chemin : les sous-vues de Projection
+ *  (`/projection/...`) partagent la même clé → pas de transition de page en
+ *  changeant d'onglet, seulement en changeant de page de premier niveau. */
+function topSegment(pathname: string): string {
+  return "/" + (pathname.split("/")[1] ?? "");
+}
+
+function Shell() {
+  const location = useLocation();
 
   return (
     <div className="shell">
-      <Sidebar active={route} onNavigate={setRoute} />
+      <Sidebar />
       <main className="main">
         <AnimatePresence mode="wait">
           <motion.div
-            key={route}
+            key={topSegment(location.pathname)}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
-            {route === "profil" && <ProfilPage />}
-            {route === "patrimoine" && <PatrimoinePage />}
-            {route === "flux" && <FluxPage />}
-            {route === "projection" && <ProjectionPage />}
+            <Routes location={location}>
+              <Route path="/" element={<Navigate to={DEFAULT_PATH} replace />} />
+              <Route path="/profil" element={<ProfilPage />} />
+              <Route path="/patrimoine" element={<PatrimoinePage />} />
+              <Route path="/flux" element={<FluxPage />} />
+              <Route path="/projection" element={<ProjectionPage />} />
+              <Route path="/projection/:vue" element={<ProjectionPage />} />
+              <Route path="*" element={<Navigate to={DEFAULT_PATH} replace />} />
+            </Routes>
           </motion.div>
         </AnimatePresence>
       </main>
@@ -36,7 +49,9 @@ function Router() {
 export default function App() {
   return (
     <StoreProvider>
-      <Router />
+      <BrowserRouter>
+        <Shell />
+      </BrowserRouter>
     </StoreProvider>
   );
 }

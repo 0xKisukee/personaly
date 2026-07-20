@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../lib/store";
+import { projectionPath, viewFromSlug, type ProjectionViewId } from "../routes";
 import type { PlannedEvent, ProjectionParams } from "../lib/types";
 import { eventYear, simInput } from "../lib/types";
 import { project } from "../lib/projection";
@@ -19,7 +21,7 @@ import YearDetailModal from "./projection/YearDetailModal";
 
 const HORIZONS = [10, 20, 30, 40];
 
-type ViewId = "proj" | "events" | "cash" | "mc";
+type ViewId = ProjectionViewId;
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: "proj", label: "Projection" },
   { id: "events", label: "Événements" },
@@ -36,7 +38,11 @@ const VIEWS: { id: ViewId; label: string }[] = [
 export default function ProjectionPage() {
   const { state, plan, update, updatePlan } = useStore();
   const p = plan.projection;
-  const [view, setView] = useState<ViewId>("proj");
+  // vue active portée par l'URL (`/projection/:vue`) : deep-link + refresh sans perte.
+  const { vue } = useParams();
+  const navigate = useNavigate();
+  const view = viewFromSlug(vue);
+  const setView = (v: ViewId) => navigate(projectionPath(v));
   const [chartMode, setChartMode] = useState<"net" | "composition" | "plans">("net");
   const [selYear, setSelYear] = useState<number | null>(null);
   const [evDraft, setEvDraft] = useState<PlannedEvent | null>(null);

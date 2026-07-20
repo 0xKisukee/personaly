@@ -52,55 +52,72 @@ function normalizeEvents(raw: unknown): PlannedEvent[] {
   }) as PlannedEvent[];
 }
 
-/** Exporté pour les tests. */
+/**
+ * Migre un objet JSON quelconque (localStorage OU fichier importé) vers la forme
+ * courante d'`AppState`. Tolérant : un objet vide/invalide retombe sur EMPTY_STATE.
+ * Exporté pour les tests (round-trip export/import).
+ */
+export function migrateState(input: unknown): AppState {
+  if (!input || typeof input !== "object") return EMPTY_STATE;
+  // JSON brut : accès tolérants aux clés (comme l'ancien JSON.parse en `any`).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = input as any;
+
+  // migration : état PLAT (v1 sans plans) -> les événements/jalons/hypothèses
+  // de l'époque deviennent le « Plan principal ». Les finances courantes
+  // (profil, actifs, passifs, flux) restent au niveau racine.
+  if (!Array.isArray(parsed.plans)) {
+    const plan: Plan = {
+      ...DEFAULT_PLAN,
+      milestones: parsed.milestones ?? [],
+      events: normalizeEvents(parsed.events),
+      projection: loadProjection(parsed.projection),
+    };
+    return {
+      ...EMPTY_STATE,
+      profile: parsed.profile ?? EMPTY_STATE.profile,
+      assets: normalizeAssets(parsed.assets),
+      liabilities: parsed.liabilities ?? [],
+      incomes: parsed.incomes ?? [],
+      expenses: parsed.expenses ?? [],
+      plans: [plan],
+      activePlanId: plan.id,
+    };
+  }
+
+  // état à plans : compléter les clés manquantes de chaque plan et purger
+  // la clé héritée `scenarios`
+  const plans: Plan[] = (parsed.plans as (Plan & { scenarios?: unknown })[]).map((pl) => {
+    const { scenarios: _legacy, ...plain } = pl;
+    void _legacy;
+    return {
+      ...DEFAULT_PLAN,
+      ...plain,
+      events: normalizeEvents(plain.events),
+      projection: loadProjection(plain.projection),
+    };
+  });
+  if (plans.length === 0) plans.push(DEFAULT_PLAN);
+  const activePlanId = plans.some((pl) => pl.id === parsed.activePlanId)
+    ? parsed.activePlanId
+    : plans[0].id;
+  return { ...EMPTY_STATE, ...parsed, assets: normalizeAssets(parsed.assets), plans, activePlanId };
+}
+
+/** Charge l'état depuis le localStorage (via `migrateState`). Exporté pour les tests. */
 export function loadState(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY_STATE;
-    const parsed = JSON.parse(raw);
-
-    // migration : état PLAT (v1 sans plans) -> les événements/jalons/hypothèses
-    // de l'époque deviennent le « Plan principal ». Les finances courantes
-    // (profil, actifs, passifs, flux) restent au niveau racine.
-    if (!Array.isArray(parsed.plans)) {
-      const plan: Plan = {
-        ...DEFAULT_PLAN,
-        milestones: parsed.milestones ?? [],
-        events: normalizeEvents(parsed.events),
-        projection: loadProjection(parsed.projection),
-      };
-      return {
-        ...EMPTY_STATE,
-        profile: parsed.profile ?? EMPTY_STATE.profile,
-        assets: normalizeAssets(parsed.assets),
-        liabilities: parsed.liabilities ?? [],
-        incomes: parsed.incomes ?? [],
-        expenses: parsed.expenses ?? [],
-        plans: [plan],
-        activePlanId: plan.id,
-      };
-    }
-
-    // état à plans : compléter les clés manquantes de chaque plan et purger
-    // la clé héritée `scenarios`
-    const plans: Plan[] = (parsed.plans as (Plan & { scenarios?: unknown })[]).map((pl) => {
-      const { scenarios: _legacy, ...plain } = pl;
-      void _legacy;
-      return {
-        ...DEFAULT_PLAN,
-        ...plain,
-        events: normalizeEvents(plain.events),
-        projection: loadProjection(plain.projection),
-      };
-    });
-    if (plans.length === 0) plans.push(DEFAULT_PLAN);
-    const activePlanId = plans.some((pl) => pl.id === parsed.activePlanId)
-      ? parsed.activePlanId
-      : plans[0].id;
-    return { ...EMPTY_STATE, ...parsed, assets: normalizeAssets(parsed.assets), plans, activePlanId };
+    return migrateState(JSON.parse(raw));
   } catch {
     return EMPTY_STATE;
   }
+}
+
+/** Sérialise l'état courant pour l'export (fichier de sauvegarde JSON). */
+export function serializeState(state: AppState): string {
+  return JSON.stringify(state, null, 2);
 }
 
 interface Store {
@@ -110,6 +127,8 @@ interface Store {
   update: (patch: Partial<AppState> | ((s: AppState) => AppState)) => void;
   /** Modifie le PLAN ACTIF uniquement (les finances courantes ne bougent pas). */
   updatePlan: (patch: Partial<Plan> | ((p: Plan) => Plan)) => void;
+  /** Remplace tout l'état par un JSON importé (migré via `migrateState`). Lève si invalide. */
+  importState: (json: string) => void;
   reset: () => void;
 }
 
@@ -148,11 +167,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const importState = useCallback<Store["importState"]>((json) => {
+    // JSON.parse lève sur fichier corrompu ; migrateState absorbe les formes anciennes/partielles.
+    setState(migrateState(JSON.parse(json)));
+  }, []);
+
   const reset = useCallback(() => setState(EMPTY_STATE), []);
 
   const value = useMemo(
-    () => ({ state, plan: activePlanOf(state), update, updatePlan, reset }),
-    [state, update, updatePlan, reset]
+    () => ({ state, plan: activePlanOf(state), update, updatePlan, importState, reset }),
+    [state, update, updatePlan, importState, reset]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

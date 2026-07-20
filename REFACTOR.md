@@ -591,15 +591,15 @@ Historique conservé — question → **ta réponse** → décision appliquée d
 Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 
 **Reprise rapide**
-- **Dernière session :** — (rien d'implémenté ; plan validé)
-- **Prochaine étape :** Phase 0 — ajouter le routeur + export/import JSON.
-- **Branche en cours :** —
+- **Dernière session :** ✅ **Phase 0 terminée** (routeur, export/import JSON, garde-fous). Build + 118 tests verts, dev server OK.
+- **Prochaine étape :** Phase 1 — éclater `index.css` en `styles/*` + extraire les primitives `ui/*` (choisir la direction de design §12, défaut D1).
+- **Branche en cours :** `main` (Phase 0 en working tree, **pas encore committée**).
 
 **État par phase**
 
 | Phase | Statut | Notes |
 |---|---|---|
-| 0 — Socle (routeur, export/import, garde-fous) | ⬜ | — |
+| 0 — Socle (routeur, export/import, garde-fous) | ✅ | `react-router-dom` (BrowserRouter) ; `routes.tsx` ; `migrateState`/`serializeState`/`importState` ; contrôles données + indicateur « Enregistré » en sidebar ; vue Projection portée par `/projection/:vue`. |
 | 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ⬜ | direction design §12 à choisir |
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ⬜ | phase la plus risquée |
 | 3 — Couleur de performance | ⬜ | — |
@@ -610,10 +610,22 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
-- (aucune pour l'instant — voir §9 pour les décisions initiales)
+- **Routeur = `BrowserRouter`** (URLs propres `/patrimoine`). Vite (dev + preview) fournit
+  le fallback SPA. ⚠️ Si un jour on sert le build en statique (GitHub Pages…) sans fallback,
+  basculer en `HashRouter` (1 ligne dans `App.tsx`) pour éviter les 404 au refresh.
+- Refactor `store.tsx` : extraction de **`migrateState(input)`** (partagée par `loadState`
+  et l'import) — utile pour tester le round-trip export/import.
+- Transition de page (`AnimatePresence`) **clée sur le 1er segment d'URL** : changer d'onglet
+  dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
-- _À compléter : date · ce qui a été fait · ce qui reste · pièges rencontrés._
+- **2026-07-20 — Phase 0.** Ajout `react-router-dom` ; `src/routes.tsx` (métadonnées nav +
+  slugs des vues de Projection) ; `App.tsx` → shell `BrowserRouter` + `<Routes>` animées ;
+  `Sidebar` réécrite (hooks routeur) + **`DataControls`** (export/import/reset + indicateur
+  « Enregistré ») ; `ProjectionPage` : vue portée par `/projection/:vue`. `store.tsx` :
+  `migrateState` / `serializeState` / `importState`. Tests : +3 cas round-trip/tolérance
+  (118 verts). CSS : bloc `.side-data*`. Build + dev OK. **Reste :** rien pour Phase 0.
+  Piège rencontré : `timeout` absent sur macOS (pour lancer le dev en CI local) — sans impact.
 
 ---
 

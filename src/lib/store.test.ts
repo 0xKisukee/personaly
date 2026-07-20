@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void mem.delete(k),
 });
 
-import { loadState } from "./store";
+import { loadState, migrateState, serializeState } from "./store";
 import { EMPTY_STATE } from "./types";
 
 const KEY = "personaly:v1";
@@ -106,5 +106,33 @@ describe("loadState", () => {
     const s = loadState();
     expect(s.plans).toHaveLength(1);
     expect(s.activePlanId).toBe(s.plans[0].id);
+  });
+});
+
+describe("export / import (round-trip)", () => {
+  it("serializeState → migrateState restitue un état à l'identique", () => {
+    const state = {
+      ...EMPTY_STATE,
+      profile: { firstName: "Camille", birthDate: "1990-05-01" },
+      assets: [{ id: "a", label: "PEA", category: "placement" as const, value: 50000, growthRate: 6, incomeMode: "none" as const }],
+      liabilities: [{ id: "l", label: "Prêt", category: "emprunt_immo" as const, outstanding: 120000 }],
+      plans: [{ ...EMPTY_STATE.plans[0], projection: { ...EMPTY_STATE.plans[0].projection, horizon: 25 } }],
+    };
+    const restored = migrateState(JSON.parse(serializeState(state)));
+    expect(restored).toEqual(state);
+  });
+
+  it("migrateState est tolérant : entrée non-objet → état vierge", () => {
+    expect(migrateState(null)).toEqual(EMPTY_STATE);
+    expect(migrateState("nope")).toEqual(EMPTY_STATE);
+    expect(migrateState(42)).toEqual(EMPTY_STATE);
+  });
+
+  it("import d'un fichier ancien (état plat) : migré comme au chargement", () => {
+    const legacy = { profile: { firstName: "Léo", birthDate: "" }, events: [{ id: "e", kind: "cash", label: "x", year: 2030, amount: 1 }] };
+    const s = migrateState(legacy);
+    expect(s.plans).toHaveLength(1);
+    expect(s.plans[0].events).toHaveLength(1);
+    expect(s.profile.firstName).toBe("Léo");
   });
 });

@@ -466,6 +466,58 @@ select.select {
   font-size: 15px;
 }
 
+/* données locales : export / import / reset + statut d'enregistrement */
+.side-data {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.side-data-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.side-data-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.side-data-dot[data-on="true"] {
+  background: var(--gain);
+  box-shadow: 0 0 8px var(--gain);
+}
+.side-data-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.side-data-btn {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.side-data-btn:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(243, 239, 228, 0.04);
+}
+.side-data-btn.danger:hover {
+  color: var(--drain);
+  border-color: rgba(213, 152, 115, 0.4);
+}
+
 /* ---------------------------- MAIN ----------------------------- */
 .main {
   min-width: 0;
