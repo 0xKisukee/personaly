@@ -83,8 +83,25 @@ src/
     ├── ProfilPage.tsx       # 01 — Profil (identité seule)
     ├── PatrimoinePage.tsx   # 02 — Patrimoine (actifs + passifs)
     ├── FluxPage.tsx         # 03 — Flux (entrants/sortants)
-    └── ProjectionPage.tsx   # 04 — Projection : 4 vues (Projection / Événements / Cash-flow / Probabilité)
+    ├── ProjectionPage.tsx   # 04 — Projection : ORCHESTRATEUR (état, moteur, navigation, modales)
+    └── projection/          # 04 — les 4 vues + leurs composants, un fichier par responsabilité
+        ├── ProjectionView.tsx   # vue Projection (hypothèses, hero, graphe, table)
+        ├── EventsView.tsx       # vue Jalons & Événements (liste)
+        ├── CashflowView.tsx     # vue Cash-flow (habille SankeyChart)
+        ├── MonteCarloView.tsx   # vue Probabilité (jauge + FanChart)
+        ├── NetWorthChart.tsx    # graphe patrimoine net / composition (SVG maison)
+        ├── CompareChart.tsx     # graphe mode « Plans » (SVG maison)
+        ├── CascadeEditor.tsx    # éditeur de cascade surplus / retrait
+        ├── EventModal.tsx       # modale création/édition d'un événement (6 types)
+        ├── YearDetailModal.tsx  # modale composition d'une année
+        ├── eventHelpers.ts      # logique métier des événements (switchKind, résumés, listes)
+        └── chartUtils.ts        # maths + formatage partagés des graphes
 ```
+
+> La page **ProjectionPage.tsx** ne fait que composer l'entrée du moteur, lancer la
+> projection une fois et distribuer les résultats aux vues (données descendantes,
+> callbacks remontants). Chaque vue/composant de `projection/` est autonome et testable
+> isolément — ajouter une vue = un fichier + un onglet dans `VIEWS`.
 
 La navigation est un simple `useState<RouteId>` dans `App.tsx`. Les `ROUTES`
 sont définies dans `Sidebar.tsx`.

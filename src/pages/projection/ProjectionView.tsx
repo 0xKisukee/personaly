@@ -1,0 +1,242 @@
+import { motion } from "motion/react";
+import type { Asset, Milestone, ProjectionParams } from "../../lib/types";
+import type { ProjectionEvent, YearPoint } from "../../lib/projection";
+import { money, signedMoney, percent } from "../../lib/format";
+import CascadeEditor from "./CascadeEditor";
+import NetWorthChart from "./NetWorthChart";
+import CompareChart from "./CompareChart";
+import { SERIES_COLORS } from "./chartUtils";
+
+type ChartMode = "net" | "composition" | "plans";
+type PlanSeries = { name: string; points: YearPoint[] }[] | null;
+
+/**
+ * Vue Projection : hypothèses paramétrables, hero, indépendance financière,
+ * graphe (net / composition / plans) et table annuelle cliquable.
+ */
+export default function ProjectionView({
+  p, setP, points, events, fiYearIndex,
+  chartMode, setChartMode, planSeries, plansCount,
+  milestones, eligibleAssets, onEditEvent, onSelectYear,
+}: {
+  p: ProjectionParams;
+  setP: (patch: Partial<ProjectionParams>) => void;
+  points: YearPoint[];
+  events: ProjectionEvent[];
+  fiYearIndex: number | null;
+  chartMode: ChartMode;
+  setChartMode: (m: ChartMode) => void;
+  planSeries: PlanSeries;
+  plansCount: number;
+  milestones: Milestone[];
+  eligibleAssets: Asset[];
+  onEditEvent: (id: string) => void;
+  onSelectYear: (year: number) => void;
+}) {
+  const now = points[0];
+  const end = points[points.length - 1];
+  const delta = end.netWorth - now.netWorth;
+  const mult = now.netWorth > 0 ? end.netWorth / now.netWorth : null;
+  const cagr = now.netWorth > 0 && end.netWorth > 0 ? (Math.pow(end.netWorth / now.netWorth, 1 / p.horizon) - 1) * 100 : null;
+  const fiPoint = fiYearIndex !== null ? points[fiYearIndex] : null;
+
+  return (
+    <>
+      <motion.div
+        className="assum"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <div className="field assum-num">
+          <label>Rendement épargne réinvestie</label>
+          <div className="assum-input">
+            <input className="input mono" type="number" step="0.1" value={p.savingsYield || ""} placeholder="0"
+              onChange={(e) => setP({ savingsYield: Number(e.target.value) })} />
+            <span className="assum-unit">%/an</span>
+          </div>
+        </div>
+        <div className="field assum-num">
+          <label>Inflation</label>
+          <div className="assum-input">
+            <input className="input mono" type="number" step="0.1" value={p.inflation || ""} placeholder="0"
+              onChange={(e) => setP({ inflation: Number(e.target.value) })} />
+            <span className="assum-unit">%/an</span>
+          </div>
+        </div>
+        <div className="field assum-num">
+          <label>Patrimoine d'indépendance</label>
+          <div className="assum-input">
+            <input className="input mono" type="number" placeholder="montant" style={{ width: 130 }}
+              value={p.fiTarget ?? ""} onChange={(e) => setP({ fiTarget: e.target.value ? Number(e.target.value) : undefined })} />
+            <span className="assum-unit">€</span>
+          </div>
+        </div>
+        <div className="assum-toggles">
+          <label className="auto-toggle">
+            <input type="checkbox" checked={p.indexIncomes} onChange={(e) => setP({ indexIncomes: e.target.checked })} />
+            Indexer les revenus
+          </label>
+          <label className="auto-toggle">
+            <input type="checkbox" checked={p.indexExpenses} onChange={(e) => setP({ indexExpenses: e.target.checked })} />
+            Indexer les dépenses
+          </label>
+          <label className="auto-toggle">
+            <input type="checkbox" checked={p.realTerms} onChange={(e) => setP({ realTerms: e.target.checked })} />
+            Euros constants
+          </label>
+        </div>
+
+        {/* cascade d'affectation du surplus : actif 1 → actif 2 → … → épargne */}
+        <CascadeEditor
+          mode="surplus"
+          label="Affectation du surplus"
+          eligible={eligibleAssets}
+          ids={p.surplusTargets ?? []}
+          onChange={(ids) => setP({ surplusTargets: ids.length ? ids : undefined })}
+        />
+        {/* cascade de retrait (miroir) : où puiser quand le mois est déficitaire */}
+        <CascadeEditor
+          mode="withdraw"
+          label="Retraits en cas de déficit"
+          eligible={eligibleAssets}
+          ids={p.withdrawalTargets ?? []}
+          onChange={(ids) => setP({ withdrawalTargets: ids.length ? ids : undefined })}
+        />
+      </motion.div>
+
+      {/* --------- hero --------- */}
+      <motion.div className="wealth-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
+        <div className="wealth-cell lead">
+          <div className="eyebrow">Patrimoine net en {end.year}{p.realTerms ? " · € constants" : ""}</div>
+          <div className={"v " + (end.netWorth < 0 ? "neg" : "")}>{money(end.netWorth)}</div>
+          <div className="sub">Dans {p.horizon} ans{end.age !== null ? ` · ${end.age} ans` : ""}</div>
+        </div>
+        <div className="wealth-cell">
+          <div className="eyebrow">Aujourd'hui</div>
+          <div className="v">{money(now.netWorth)}</div>
+          <div className="sub">{now.year}{now.age !== null ? ` · ${now.age} ans` : ""}</div>
+        </div>
+        <div className="wealth-cell">
+          <div className="eyebrow">Évolution</div>
+          <div className={"v " + (delta >= 0 ? "pos" : "neg")}>{signedMoney(delta)}</div>
+          <div className="sub">
+            {mult !== null ? `× ${mult.toFixed(1)}` : "—"}
+            {cagr !== null ? ` · ${percent(cagr)}/an` : ""}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* --------- indépendance financière (seuil défini par l'utilisateur) --------- */}
+      {fiPoint && p.fiTarget != null && (
+        <div className="fi-banner">
+          <span className="fi-dot" />
+          <b>Indépendance financière</b> atteinte en <b>{fiPoint.year}</b>
+          {fiPoint.age !== null ? ` (${fiPoint.age} ans)` : ""} — ton patrimoine net dépasse alors {money(p.fiTarget)}.
+        </div>
+      )}
+      {!fiPoint && p.fiTarget != null && p.fiTarget > 0 && (
+        <div className="fi-banner" style={{ borderColor: "rgba(213,152,115,0.4)", background: "rgba(213,152,115,0.07)" }}>
+          <span className="fi-dot" style={{ background: "var(--drain)", boxShadow: "0 0 10px var(--drain)" }} />
+          <b>Indépendance financière</b> ({money(p.fiTarget)}) non atteinte sur l'horizon —
+          il manque <b>{money(Math.max(0, p.fiTarget - end.netWorth))}</b> en {end.year}.
+        </div>
+      )}
+
+      <motion.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
+        <div className="chart-head">
+          <div className="segment">
+            <button data-on={chartMode === "net"} onClick={() => setChartMode("net")}>Patrimoine net</button>
+            <button data-on={chartMode === "composition"} onClick={() => setChartMode("composition")}>Composition</button>
+            {plansCount > 1 && (
+              <button data-on={chartMode === "plans"} onClick={() => setChartMode("plans")}>Plans</button>
+            )}
+          </div>
+          {chartMode === "composition" && (
+            <div className="chart-legend">
+              <span><i style={{ background: "var(--sage)" }} /> Actifs</span>
+              <span><i style={{ background: "var(--gain)" }} /> Épargne</span>
+              <span><i style={{ background: "var(--drain)" }} /> Dettes</span>
+            </div>
+          )}
+          {chartMode === "plans" && planSeries && (
+            <div className="chart-legend">
+              {planSeries.map((s, i) => (
+                <span key={s.name}><i style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }} /> {s.name}</span>
+              ))}
+            </div>
+          )}
+          {chartMode !== "plans" && (
+            <div className="chart-legend mark-legend">
+              {events.some((e) => e.kind === "planned") && (
+                <span><b style={{ color: "var(--brass-bright)" }}>⚑</b> événement — clique pour éditer</span>
+              )}
+              {events.some((e) => e.kind === "loan") && (
+                <span><b style={{ color: "var(--sage)" }}>✓</b> fin d'emprunt</span>
+              )}
+              {events.some((e) => e.kind === "fi") && (
+                <span><b style={{ color: "var(--gain)" }}>◆</b> indépendance financière</span>
+              )}
+              {milestones.length > 0 && (
+                <span><b style={{ color: "var(--sage)" }}>◇</b> jalon</span>
+              )}
+            </div>
+          )}
+        </div>
+        {chartMode === "plans" && planSeries ? (
+          <CompareChart series={planSeries} />
+        ) : (
+          <NetWorthChart
+            points={points}
+            events={events}
+            milestones={milestones}
+            mode={chartMode === "plans" ? "net" : chartMode}
+            onEventClick={onEditEvent}
+          />
+        )}
+      </motion.div>
+
+      {/* --------- table --------- */}
+      <section className="section" style={{ marginTop: 32 }}>
+        <div className="section-head">
+          <h2>Détail annuel</h2>
+          <span className="spacer" />
+          <span className="hint"><span className="dot brass" /> clique une année pour voir sa composition</span>
+        </div>
+        <div className="proj-table-wrap">
+          <table className="proj-table">
+            <thead>
+              <tr>
+                <th>Année</th>
+                <th className="r">Actifs</th>
+                <th className="r">Dettes</th>
+                <th className="r">Épargne cumulée</th>
+                <th className="r">Patrimoine net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((pt) => (
+                <tr key={pt.yearIndex} data-now={pt.yearIndex === 0} data-fi={pt.yearIndex === fiYearIndex}
+                  className="proj-row" onClick={() => onSelectYear(pt.year)}>
+                  <td>{pt.year}{pt.age !== null && <span className="proj-age"> · {pt.age} ans</span>}</td>
+                  <td className="r mono">{money(pt.grossAssets)}</td>
+                  <td className="r mono" style={{ color: pt.debt > 0 ? "var(--drain)" : "var(--ink-faint)" }}>
+                    {pt.debt > 0 ? "−" + money(pt.debt) : "—"}
+                  </td>
+                  <td className="r mono" style={{ color: pt.savings < 0 ? "var(--drain)" : "var(--ink-soft)" }}>{signedMoney(pt.savings)}</td>
+                  <td className="r mono" style={{ fontWeight: 600, color: "var(--brass-bright)" }}>{money(pt.netWorth)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p className="help" style={{ marginTop: 18 }}>
+        Hypothèses : taux d'évolution et revenus supposés constants{p.realTerms ? ", montants en euros constants" : ", montants en euros courants"}.
+        {(p.withdrawalTargets ?? []).length > 0 && <> Les déficits puisent dans les actifs de la cascade de retrait avant de peser sur l'épargne.</>}
+        {" "}Estimation, hors fiscalité.
+      </p>
+    </>
+  );
+}
