@@ -36,7 +36,8 @@ export default function DashboardPage() {
   const horizons = useMemo(() => {
     if (!hasData) return null;
     const base = { ...DEFAULT_PLAN, milestones: [], events: [] };
-    const { points } = project(simInput(state, base), { ...DEFAULT_PROJECTION, horizon: HORIZON });
+    const params = { ...DEFAULT_PROJECTION, inflation: state.settings.defaultInflation, horizon: HORIZON };
+    const { points } = project(simInput(state, base), params);
     const at = (i: number) => points.find((p) => p.yearIndex === i)?.netWorth ?? null;
     return [1, 5, 10].map((y) => ({ y, net: at(y) }));
   }, [state, hasData]);

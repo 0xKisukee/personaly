@@ -4,12 +4,14 @@ import { serializeState, useStore } from "../lib/store";
 import { netWealth } from "../lib/selectors";
 import { ageFrom, money, uid } from "../lib/format";
 import { ROUTES } from "../routes";
-import { IconPlus } from "./icons";
+import { IconPlus, IconSettings } from "./icons";
+import SettingsModal from "./SettingsModal";
 
 export default function Sidebar() {
   const { state, update } = useStore();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const net = netWealth(state);
   const name = state.profile.firstName.trim();
   const age = ageFrom(state.profile.birthDate);
@@ -87,15 +89,18 @@ export default function Sidebar() {
         <div className="net" style={{ color: net < 0 ? "var(--drain)" : "var(--ink)" }}>
           {money(net)}
         </div>
-        <div className="who">
+        <button className="who" onClick={() => setSettingsOpen(true)} title="Paramètres">
           <div className="avatar">{name ? name[0].toUpperCase() : "?"}</div>
-          <div>
+          <div className="who-name">
             {name || "Profil à compléter"}
             {age !== null && <span style={{ color: "var(--ink-faint)" }}> · {age} ans</span>}
           </div>
-        </div>
+          <IconSettings size={16} />
+        </button>
         <DataControls />
       </div>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </aside>
   );
 }

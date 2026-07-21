@@ -162,7 +162,7 @@ export default function FluxPage() {
   return (
     <>
       <PageHeader
-        eyebrow="03 — Flux"
+        eyebrow="02 — Flux"
         title={
           <>
             Entrants & <em>sortants</em>

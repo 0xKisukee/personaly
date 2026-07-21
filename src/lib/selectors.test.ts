@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AppState, Asset, Liability } from "./types";
-import { DEFAULT_PLAN } from "./types";
+import { DEFAULT_PLAN, DEFAULT_SETTINGS } from "./types";
 import {
   assetYearlyIncome, assetYearlyGrowth, grossWealth, totalLiabilities, netWealth,
   patrimoineIncomeYearly, extraIncomeYearly, capitalizedGrowthYearly,
@@ -19,6 +19,7 @@ const asset = (over: Partial<Asset>): Asset => ({
 });
 const state = (over: Partial<AppState>): AppState => ({
   profile: { firstName: "", birthDate: "" },
+  settings: DEFAULT_SETTINGS,
   assets: [], liabilities: [], incomes: [], expenses: [],
   plans: [DEFAULT_PLAN], activePlanId: DEFAULT_PLAN.id, ...over,
 });

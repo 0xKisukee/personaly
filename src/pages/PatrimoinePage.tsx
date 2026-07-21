@@ -111,7 +111,7 @@ export default function PatrimoinePage() {
   return (
     <>
       <PageHeader
-        eyebrow="02 — Patrimoine"
+        eyebrow="01 — Patrimoine"
         title={
           <>
             Actifs & <em>passifs</em>

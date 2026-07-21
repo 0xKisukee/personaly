@@ -4,7 +4,7 @@
    dans l'URL (deep-link, back/forward, refresh sans perte de vue).
    =========================================================================== */
 
-export type RouteId = "accueil" | "profil" | "patrimoine" | "flux" | "projection";
+export type RouteId = "accueil" | "patrimoine" | "flux" | "projection";
 
 export interface RouteDef {
   id: RouteId;
@@ -16,7 +16,6 @@ export interface RouteDef {
 /** Routes de premier niveau affichées dans la nav de la sidebar (index = n° « 00 »…). */
 export const ROUTES: RouteDef[] = [
   { id: "accueil", path: "/", label: "Accueil" },
-  { id: "profil", path: "/profil", label: "Profil" },
   { id: "patrimoine", path: "/patrimoine", label: "Patrimoine" },
   { id: "flux", path: "/flux", label: "Flux" },
   { id: "projection", path: "/projection", label: "Projection" },

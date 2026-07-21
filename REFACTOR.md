@@ -617,6 +617,12 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
+- **Modales portées vers `document.body`** (`createPortal`). Un ancêtre avec
+  `backdrop-filter`/`transform` (ex. sidebar) devient le bloc conteneur d'un `position: fixed`
+  et enferme la modale. Ne pas rendre de scrim plein écran sous un tel ancêtre sans portail.
+- **Pas de page pour un réglage simple.** Nom/date de naissance + inflation par défaut vivent
+  dans le panneau **Paramètres** (modale, ouverte depuis la sidebar), pas une page dédiée.
+  L'inflation par défaut (`settings.defaultInflation`) alimente la trajectoire de l'Accueil.
 - **Accueil = trajectoire de BASE, sans plan.** Les plans sont **hypothétiques** et vivent sur
   la page Projection. Le Dashboard projette les finances courantes sans événements/jalons ni
   hypothèses de plan (`DEFAULT_PROJECTION`), et « À venir » ne liste que des faits de base (flux
@@ -641,6 +647,19 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Paramètres + suppression page Profil (hors-phase, retour utilisateur).**
+  Page Profil supprimée (overkill pour nom + date) : route `profil` retirée
+  (`routes.tsx`/`App.tsx`), `pages/ProfilPage.tsx` supprimé, eyebrows renumérotés
+  (Patrimoine 01, Flux 02, Projection 03 ; nav 0-indexée avec Accueil 00). Nouveau panneau
+  **Paramètres** (`components/SettingsModal.tsx`) ouvert depuis le bloc profil de la sidebar
+  (devenu bouton + `IconSettings`) : édite nom, date de naissance ET **inflation par défaut**.
+  Modèle : `AppSettings { defaultInflation }` + `AppState.settings` + `DEFAULT_SETTINGS`
+  (= `DEFAULT_PROJECTION.inflation`, 2 %) ; migration store backfill (settings absents/partiels)
+  + 2 tests. **`DashboardPage`** utilise `state.settings.defaultInflation` pour la trajectoire
+  de base. **Fix modale (important) :** `Modal` est désormais **porté vers `document.body`**
+  (`createPortal`) — sinon le `backdrop-filter` de la sidebar en faisait le bloc conteneur du
+  `position: fixed`, enfermant la modale en petit dans la sidebar. Corrige toutes les modales.
+  Build + **129 tests** verts.
 - **2026-07-21 — Phase 4 (Dashboard).** `routes.tsx` : route `accueil` (`/`) en tête,
   `DEFAULT_PATH = "/"` ; `App.tsx` : `/` → `DashboardPage` ; `Sidebar` : numérotation nav
   0-indexée (`00 Accueil` … `04 Projection`, aligne les eyebrows des pages). Nouveau

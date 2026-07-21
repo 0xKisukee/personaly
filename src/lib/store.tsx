@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -136,7 +136,15 @@ export function migrateState(input: unknown): AppState {
   const activePlanId = plans.some((pl) => pl.id === parsed.activePlanId)
     ? parsed.activePlanId
     : plans[0].id;
-  return { ...EMPTY_STATE, ...parsed, assets: normalizeAssets(parsed.assets), liabilities: normalizeLiabilities(parsed.liabilities), plans, activePlanId };
+  return {
+    ...EMPTY_STATE,
+    ...parsed,
+    settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+    assets: normalizeAssets(parsed.assets),
+    liabilities: normalizeLiabilities(parsed.liabilities),
+    plans,
+    activePlanId,
+  };
 }
 
 /** Charge l'état depuis le localStorage (via `migrateState`). Exporté pour les tests. */

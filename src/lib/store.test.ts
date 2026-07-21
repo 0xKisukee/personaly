@@ -108,6 +108,16 @@ describe("loadState", () => {
     expect(s.activePlanId).toBe(s.plans[0].id);
   });
 
+  it("backfill des réglages : settings absents → inflation par défaut (2 %)", () => {
+    write({ assets: [], plans: [{ id: "p1", name: "P", projection: {} }], activePlanId: "p1" });
+    expect(loadState().settings.defaultInflation).toBe(2);
+  });
+
+  it("réglages partiels préservés à l'import (pas écrasés par le défaut)", () => {
+    write({ settings: { defaultInflation: 3.5 }, plans: [{ id: "p1", name: "P", projection: {} }], activePlanId: "p1" });
+    expect(loadState().settings.defaultInflation).toBe(3.5);
+  });
+
   it("migre la taxonomie d'actifs : livret_epargne & placement → epargne (versements préservés)", () => {
     write({
       assets: [

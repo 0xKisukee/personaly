@@ -378,8 +378,19 @@ export const DEFAULT_PLAN: Plan = {
  * État de l'app : les FINANCES COURANTES (profil, actifs, passifs, flux — la
  * réalité d'aujourd'hui, source de vérité unique) + des PLANS de simulation.
  */
+/** Réglages globaux du site (édités dans le panneau Paramètres). */
+export interface AppSettings {
+  /** Inflation par défaut (%/an) — sert de base à la trajectoire de l'Accueil. */
+  defaultInflation: number;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  defaultInflation: DEFAULT_PROJECTION.inflation,
+};
+
 export interface AppState {
   profile: Profile;
+  settings: AppSettings;
   assets: Asset[];
   liabilities: Liability[];
   incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
@@ -390,6 +401,7 @@ export interface AppState {
 
 export const EMPTY_STATE: AppState = {
   profile: { firstName: "", birthDate: "" },
+  settings: DEFAULT_SETTINGS,
   assets: [],
   liabilities: [],
   incomes: [],

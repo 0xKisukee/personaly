@@ -134,14 +134,35 @@
   letter-spacing: -0.02em;
 }
 .side-foot .who {
+  width: 100%;
   margin-top: 12px;
-  padding-top: 12px;
+  padding: 12px 6px 0 0;
+  border: none;
   border-top: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 13px;
   color: var(--ink-soft);
+  transition: color 0.16s ease;
+}
+.side-foot .who .who-name {
+  flex: 1;
+  min-width: 0;
+}
+.side-foot .who > svg {
+  color: var(--ink-faint);
+  flex: none;
+  transition: color 0.16s ease;
+}
+.side-foot .who:hover {
+  color: var(--ink);
+}
+.side-foot .who:hover > svg {
+  color: var(--brass);
 }
 .avatar {
   width: 30px;

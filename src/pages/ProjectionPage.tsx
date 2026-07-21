@@ -115,7 +115,7 @@ export default function ProjectionPage() {
   return (
     <>
       <PageHeader
-        eyebrow="04 — Projection"
+        eyebrow="03 — Projection"
         title={<>Ton patrimoine <em>demain</em></>}
         lede="Simulation année par année : les emprunts s'éteignent à leur terme, la valeur des actifs se compose et l'épargne est réinvestie."
         actions={

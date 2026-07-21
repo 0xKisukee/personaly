@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { IconClose } from "./icons";
 
@@ -32,7 +33,10 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
     };
   }, [open, onClose]);
 
-  return (
+  // Portail vers <body> : sinon un ancêtre avec `backdrop-filter`/`transform`
+  // (ex. la sidebar) devient le bloc conteneur du `position: fixed` et enferme la
+  // modale dans son coin au lieu de couvrir tout l'écran.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -63,6 +67,7 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

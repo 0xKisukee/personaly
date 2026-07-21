@@ -4,7 +4,6 @@ import { StoreProvider } from "./lib/store";
 import { DEFAULT_PATH } from "./routes";
 import Sidebar from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
-import ProfilPage from "./pages/ProfilPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
 import FluxPage from "./pages/FluxPage";
 import ProjectionPage from "./pages/ProjectionPage";
@@ -33,7 +32,6 @@ function Shell() {
           >
             <Routes location={location}>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/profil" element={<ProfilPage />} />
               <Route path="/patrimoine" element={<PatrimoinePage />} />
               <Route path="/flux" element={<FluxPage />} />
               <Route path="/projection" element={<ProjectionPage />} />
