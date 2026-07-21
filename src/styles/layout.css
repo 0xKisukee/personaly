@@ -542,6 +542,142 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* répartition générale : camemberts actifs + passifs côte à côte */
+.patrimoine-overview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-items: flex-start;
+  gap: 36px;
+  padding: 28px 26px;
+  margin-bottom: 24px;
+}
+.overview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+  min-width: 240px;
+  max-width: 360px;
+}
+.donut {
+  position: relative;
+  flex: none;
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* centre bien le bloc (total + label) verticalement */
+  text-align: center;
+  pointer-events: none; /* laisse passer le survol vers les segments SVG */
+}
+.donut-center-main {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.donut-center-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* légende sous le donut : lisible, survol lié à la part */
+.overview-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.overview-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  cursor: default;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.overview-legend-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+.overview-legend-val {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+  transition: color 0.15s ease;
+}
+/* survol : la ligne active s'illumine nettement (les autres ne changent pas) */
+.overview-legend-row.active {
+  background: rgba(203, 169, 107, 0.12);
+  border-color: var(--line-brass);
+}
+.overview-legend-row.active .overview-legend-label {
+  color: var(--ink);
+  font-weight: 500;
+}
+.overview-legend-row.active .overview-legend-val {
+  color: var(--ink);
+}
+
+/* onglets de famille (filtre) */
+.fam-tabs {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+/* familles d'actifs : sous-groupe avec sous-totaux (Phase 5) */
+.fam + .fam {
+  margin-top: 20px;
+}
+.fam-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 4px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.fam-label {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+.fam-head .count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.fam-head .spacer {
+  flex: 1;
+}
+.fam-total {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+.fam-total em {
+  font-style: normal;
+  font-size: 12px;
+}
 .row {
   position: relative; /* ancre la barre d'accent de perf (.perf-bar, hors grille) */
   display: grid;

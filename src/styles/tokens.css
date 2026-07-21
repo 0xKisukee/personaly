@@ -33,6 +33,14 @@
   --drain: #d59873;
   --drain-deep: #b06f4d;
 
+  /* palette CATÉGORIELLE (camemberts de répartition) : hues distincts et
+     contrastés — priorité à la lisibilité entre parts. Réglés pour le fond sombre. */
+  --cat-1: #9ec7a4; /* vert */
+  --cat-2: #e3c585; /* or */
+  --cat-3: #d59873; /* terracotta */
+  --cat-4: #7fb2c9; /* bleu acier */
+  --cat-5: #c59ac2; /* mauve */
+
   /* perf — langage couleur de performance (§8) : échelle divergente
      drain → neutre → gain, 3 paliers d'intensité DÉRIVÉS des tokens sémantiques
      (via color-mix) pour rester sobres et cohérents, jamais criards. */

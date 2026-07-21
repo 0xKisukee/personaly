@@ -159,6 +159,37 @@ export const ASSET_CATEGORIES: AssetCategory[] = [
   "autre",
 ];
 
+/* ---------------------------------------------------------------------------
+   FAMILLES — regroupement des catégories pour la liste Patrimoine (sous-totaux).
+   -------------------------------------------------------------------------- */
+export type AssetFamily = "immobilier" | "epargne" | "autres";
+
+export interface AssetFamilyDef {
+  id: AssetFamily;
+  label: string;
+  /** Couleur d'identité (donut de répartition + légende). Neutre, pas un signal de perf. */
+  accent: string;
+}
+
+/** Familles dans l'ordre d'affichage. */
+export const ASSET_FAMILIES: AssetFamilyDef[] = [
+  { id: "immobilier", label: "Immobilier", accent: "var(--cat-1)" },
+  { id: "epargne", label: "Épargne & liquidités", accent: "var(--cat-2)" },
+  { id: "autres", label: "Autres", accent: "var(--cat-4)" },
+];
+
+const CATEGORY_FAMILY: Record<AssetCategory, AssetFamily> = {
+  immobilier: "immobilier",
+  epargne: "epargne",
+  liquidites: "epargne",
+  vehicule: "autres",
+  autre: "autres",
+};
+
+export function assetFamily(category: AssetCategory): AssetFamily {
+  return CATEGORY_FAMILY[category];
+}
+
 export function assetType(category: AssetCategory): AssetType {
   return ASSET_TYPES[category] ?? ASSET_TYPES.autre;
 }

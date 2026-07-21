@@ -10,10 +10,13 @@ import type {
 } from "../lib/types";
 import {
   ASSET_CATEGORIES,
+  ASSET_FAMILIES,
+  assetFamily,
   assetType,
   hasField,
   emptyAssetOf,
   normalizeAsset,
+  type AssetFamily,
   type AssetPreset,
 } from "../lib/assets";
 import {
@@ -28,21 +31,22 @@ import { money, signedMoney, percent, uid, toYearly } from "../lib/format";
 import { monthlyPayment, formatDuration, formatEndDate } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
-import { PerformanceBadge, perfColor, Segment } from "../ui";
+import { Donut, PerformanceBadge, perfColor, Segment } from "../ui";
 import { IconBox, IconDebt, IconEdit, IconPlus, IconTrash } from "../components/icons";
 
-type AssetSort = "ordre" | "perf" | "valeur";
+type AssetSort = "nom" | "perf" | "valeur";
 const SORT_OPTIONS: { value: AssetSort; label: string }[] = [
-  { value: "ordre", label: "Ordre" },
-  { value: "perf", label: "Rendement" },
   { value: "valeur", label: "Valeur" },
+  { value: "perf", label: "Rendement" },
+  { value: "nom", label: "Nom" },
 ];
 
-const LIAB_META: Record<LiabilityCategory, { label: string }> = {
-  emprunt_immo: { label: "Emprunt immobilier" },
-  credit: { label: "Crédit" },
-  autre: { label: "Autre" },
+const LIAB_META: Record<LiabilityCategory, { label: string; accent: string }> = {
+  emprunt_immo: { label: "Emprunt immobilier", accent: "var(--cat-3)" },
+  credit: { label: "Crédit", accent: "var(--cat-5)" },
+  autre: { label: "Autre", accent: "var(--ink-mute)" },
 };
+const LIAB_CATEGORIES = Object.keys(LIAB_META) as LiabilityCategory[];
 
 const emptyAsset = (): Asset => emptyAssetOf("immobilier", uid());
 
@@ -62,7 +66,9 @@ export default function PatrimoinePage() {
   const [assetDraft, setAssetDraft] = useState<Asset | null>(null);
   const [liabDraft, setLiabDraft] = useState<Liability | null>(null);
 
-  const [sort, setSort] = useState<AssetSort>("ordre");
+  const [sort, setSort] = useState<AssetSort>("valeur");
+  // vue active : toutes les familles + passifs, une famille précise, ou juste les passifs
+  const [view, setView] = useState<AssetFamily | "all" | "passifs">("all");
 
   const gross = grossWealth(state);
   const liab = totalLiabilities(state);
@@ -70,13 +76,50 @@ export default function PatrimoinePage() {
   // revenu NET (revenus distribués − charges de détention) : le vrai bénéfice du patrimoine
   const yearlyNet = state.assets.reduce((s, a) => s + assetYearlyNet(a), 0);
 
-  // ordre d'affichage (n'altère pas le store — tri de vue seulement)
-  const sortedAssets = useMemo(() => {
-    const list = state.assets.map((a, i) => ({ a, i }));
-    if (sort === "perf") list.sort((x, y) => assetPerformance(y.a).pct - assetPerformance(x.a).pct);
-    else if (sort === "valeur") list.sort((x, y) => (y.a.value || 0) - (x.a.value || 0));
-    return list.map((x) => x.a);
+  // actifs regroupés par FAMILLE, triés à l'intérieur de chaque famille (tri de vue,
+  // n'altère jamais le store). Chaque famille porte ses sous-totaux valeur + net/an.
+  const families = useMemo(() => {
+    const cmp = (a: Asset, b: Asset) =>
+      sort === "perf" ? assetPerformance(b).pct - assetPerformance(a).pct
+      : sort === "nom" ? (a.label || assetType(a.category).label).localeCompare(b.label || assetType(b.category).label)
+      : (b.value || 0) - (a.value || 0);
+    return ASSET_FAMILIES.map((fam) => {
+      const assets = state.assets.filter((a) => assetFamily(a.category) === fam.id).sort(cmp);
+      const value = assets.reduce((s, a) => s + (a.value || 0), 0);
+      const net = assets.reduce((s, a) => s + assetYearlyNet(a), 0);
+      // rentabilité agrégée de la famille = rendement total €/an rapporté à la valeur
+      const perfEur = assets.reduce((s, a) => s + assetPerformance(a).netEur, 0);
+      const perfPct = value > 0 ? (perfEur / value) * 100 : 0;
+      return { ...fam, assets, value, net, perfPct };
+    }).filter((f) => f.assets.length > 0);
   }, [state.assets, sort]);
+
+  // onglets de vue : « Tout » + familles présentes + « Passifs » (si passifs)
+  const viewTabs = useMemo(
+    () => [
+      { value: "all" as const, label: "Tout" },
+      ...families.map((f) => ({ value: f.id, label: f.id === "epargne" ? "Épargne" : f.label })),
+      ...(state.liabilities.length ? [{ value: "passifs" as const, label: "Passifs" }] : []),
+    ],
+    [families, state.liabilities.length]
+  );
+  // passifs groupés par catégorie (pour le camembert de répartition)
+  const liabGroups = useMemo(
+    () =>
+      LIAB_CATEGORIES.map((cat) => ({
+        id: cat,
+        label: LIAB_META[cat].label,
+        accent: LIAB_META[cat].accent,
+        value: state.liabilities.filter((l) => l.category === cat).reduce((s, l) => s + (l.outstanding || 0), 0),
+      })).filter((g) => g.value > 0),
+    [state.liabilities]
+  );
+
+  const showTabs = families.length > 1 || state.liabilities.length > 0;
+  const filtered = families.filter((f) => view === "all" || f.id === view);
+  const shownFamilies = filtered.length ? filtered : families; // filtre périmé → retombe sur tout
+  const showAssets = view !== "passifs";
+  const showLiabilities = view === "all" || view === "passifs";
 
   const saveAsset = (raw: Asset) => {
     // coupe les champs qu'une catégorie n'expose pas (revenu d'un immo « non loué »…)
@@ -143,7 +186,25 @@ export default function PatrimoinePage() {
         </div>
       </motion.div>
 
+      {/* répartition générale : camembert actifs + camembert passifs (niveau page) */}
+      {(gross > 0 || liabGroups.length > 0) && (
+        <div className="card patrimoine-overview">
+          {gross > 0 && (
+            <OverviewDonut label="Actifs" rows={families.map((f) => ({ id: f.id, label: f.label, value: f.value, accent: f.accent }))} />
+          )}
+          {liabGroups.length > 0 && <OverviewDonut label="Passifs" rows={liabGroups} />}
+        </div>
+      )}
+
+      {/* onglets de vue : pilotent Actifs (par famille) ET Passifs */}
+      {showTabs && (
+        <div className="fam-tabs">
+          <Segment aria-label="Filtrer le patrimoine" value={view} onChange={setView} options={viewTabs} />
+        </div>
+      )}
+
       {/* ---------------- ACTIFS ---------------- */}
+      {showAssets && (
       <section className="section">
         <div className="section-head">
           <h2>Actifs</h2>
@@ -168,72 +229,35 @@ export default function PatrimoinePage() {
             <div>Aucun actif pour l'instant.<br />Ajoute un bien immobilier, un livret, un placement…</div>
           </div>
         ) : (
-          <div className="rows">
-            {sortedAssets.map((a, i) => {
-              const Meta = assetType(a.category);
-              const inc = assetYearlyIncome(a);
-              const chg = toYearly(a.charges);
-              const net = inc - chg; // bénéfice réel de détention
-              const perf = assetPerformance(a);
-              const perfCol = perfColor(perf.pct);
-              const sp = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${percent(Math.abs(x))}`;
-              const perfTitle =
-                `Rendement total ${sp(perf.pct)} /an` +
-                (perf.cashPct ? ` · valeur ${sp(perf.latentPct)} · distribué net ${sp(perf.cashPct)}` : "");
-              return (
-                <motion.div
-                  key={a.id}
-                  className="row"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.03 * i, duration: 0.3 }}
-                >
-                  {/* accent de performance de la ligne (§8) */}
-                  <span className="perf-bar" style={{ background: perfCol }} aria-hidden />
-                  <div className="row-ic">
-                    <Meta.icon size={20} />
-                  </div>
-                  <div className="row-main">
-                    <div className="row-title">{a.label || Meta.label}</div>
-                    <div className="row-meta">
-                      <span>{Meta.label}</span>
-                      {a.incomeMode === "rate" && a.incomeRate ? (
-                        <>· <span style={{ color: "var(--gain)" }}>revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
-                      ) : a.incomeMode === "amount" && inc > 0 ? (
-                        <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
-                      ) : null}
-                      {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
-                      {(perf.pct !== 0 || a.growthRate !== 0) && <PerformanceBadge pct={perf.pct} title={perfTitle} />}
-                    </div>
-                  </div>
-                  <div className="row-val">
-                    {money(a.value)}
-                    {/* bénéfice NET de détention : revenu distribué − charges */}
-                    {inc === 0 && chg === 0 ? (
-                      <div className="flux zero">pas de revenu</div>
-                    ) : (
-                      <div className="flux" style={{ color: net >= 0 ? "var(--gain)" : "var(--drain)" }}
-                        title={chg > 0 ? `revenu ${money(inc)} − charges ${money(chg)}` : undefined}>
-                        {signedMoney(net)} /an net
-                      </div>
-                    )}
-                  </div>
-                  <div className="row-actions">
-                    <button className="icon-btn" onClick={() => setAssetDraft({ ...a })} aria-label="Modifier">
-                      <IconEdit size={16} />
-                    </button>
-                    <button className="icon-btn danger" onClick={() => delAsset(a.id)} aria-label="Supprimer">
-                      <IconTrash size={16} />
-                    </button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+          shownFamilies.map((fam) => (
+            <div className="fam" key={fam.id}>
+              <div className="fam-head">
+                <span className="fam-label">{fam.label}</span>
+                <span className="count">{fam.assets.length}</span>
+                {(fam.perfPct !== 0 || fam.net !== 0) && (
+                  <PerformanceBadge pct={fam.perfPct} title={`Rentabilité agrégée ${fam.label.toLowerCase()}`} />
+                )}
+                <span className="spacer" />
+                <span className="fam-total">
+                  {money(fam.value)}
+                  {fam.net !== 0 && (
+                    <em style={{ color: fam.net >= 0 ? "var(--gain)" : "var(--drain)" }}> · {signedMoney(fam.net)} /an net</em>
+                  )}
+                </span>
+              </div>
+              <div className="rows">
+                {fam.assets.map((a, i) => (
+                  <AssetRow key={a.id} a={a} i={i} onEdit={() => setAssetDraft({ ...a })} onDelete={() => delAsset(a.id)} />
+                ))}
+              </div>
+            </div>
+          ))
         )}
       </section>
+      )}
 
       {/* ---------------- PASSIFS ---------------- */}
+      {showLiabilities && (
       <section className="section">
         <div className="section-head">
           <h2>Passifs</h2>
@@ -292,6 +316,7 @@ export default function PatrimoinePage() {
           </div>
         )}
       </section>
+      )}
 
       {assetDraft && (
         <AssetModal
@@ -310,6 +335,101 @@ export default function PatrimoinePage() {
         />
       )}
     </>
+  );
+}
+
+/* --------------------- OVERVIEW DONUT ---------------------- */
+/** Camembert de répartition : total au centre + légende lisible dessous (survol lié). */
+function OverviewDonut({ label, rows }: { label: string; rows: { id: string; label: string; value: number; accent: string }[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  return (
+    <div className="overview-item">
+      <Donut
+        segments={rows.map((r) => ({ value: r.value, color: r.accent, label: r.label }))}
+        centerValue={money(total)}
+        centerLabel={label}
+        activeIndex={hover}
+        onHoverChange={setHover}
+      />
+      <div className="overview-legend">
+        {rows.map((r, i) => (
+          <div
+            key={r.id}
+            className={"overview-legend-row" + (hover === i ? " active" : "")}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <span className="dot" style={{ background: r.accent }} />
+            <span className="overview-legend-label">{r.label}</span>
+            <span className="overview-legend-val">
+              {money(r.value)} · {total > 0 ? Math.round((r.value / total) * 100) : 0} %
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------- ASSET ROW ----------------------- */
+function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () => void; onDelete: () => void }) {
+  const Meta = assetType(a.category);
+  const inc = assetYearlyIncome(a);
+  const chg = toYearly(a.charges);
+  const net = inc - chg; // bénéfice réel de détention
+  const perf = assetPerformance(a);
+  const perfCol = perfColor(perf.pct);
+  const sp = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${percent(Math.abs(x))}`;
+  const perfTitle =
+    `Rendement total ${sp(perf.pct)} /an` +
+    (perf.cashPct ? ` · valeur ${sp(perf.latentPct)} · distribué net ${sp(perf.cashPct)}` : "");
+
+  return (
+    <motion.div
+      className="row"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.03 * i, duration: 0.3 }}
+    >
+      {/* accent de performance de la ligne (§8) */}
+      <span className="perf-bar" style={{ background: perfCol }} aria-hidden />
+      <div className="row-ic">
+        <Meta.icon size={20} />
+      </div>
+      <div className="row-main">
+        <div className="row-title">{a.label || Meta.label}</div>
+        <div className="row-meta">
+          <span>{Meta.label}</span>
+          {a.incomeMode === "rate" && a.incomeRate ? (
+            <>· <span style={{ color: "var(--gain)" }}>revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
+          ) : a.incomeMode === "amount" && inc > 0 ? (
+            <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
+          ) : null}
+          {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
+          {(perf.pct !== 0 || a.growthRate !== 0) && <PerformanceBadge pct={perf.pct} title={perfTitle} />}
+        </div>
+      </div>
+      <div className="row-val">
+        {money(a.value)}
+        {inc === 0 && chg === 0 ? (
+          <div className="flux zero">pas de revenu</div>
+        ) : (
+          <div className="flux" style={{ color: net >= 0 ? "var(--gain)" : "var(--drain)" }}
+            title={chg > 0 ? `revenu ${money(inc)} − charges ${money(chg)}` : undefined}>
+            {signedMoney(net)} /an net
+          </div>
+        )}
+      </div>
+      <div className="row-actions">
+        <button className="icon-btn" onClick={onEdit} aria-label="Modifier">
+          <IconEdit size={16} />
+        </button>
+        <button className="icon-btn danger" onClick={onDelete} aria-label="Supprimer">
+          <IconTrash size={16} />
+        </button>
+      </div>
+    </motion.div>
   );
 }
 

@@ -598,9 +598,9 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   taux d'épargne, **répartition** des actifs (barres teintées par la perf), **à venir**
   (prochain jalon / événement). État vide → CTA « Commence par ton patrimoine ». Build +
   **127 tests** verts, boot OK.
-- **Prochaine étape :** Phase 5 — Refonte page par page (Patrimoine → Flux → Projection) avec
-  le design system + la taxonomie + le langage de perf.
-- **Branche en cours :** `main` (Phases 0→3 committées ; **Phase 4 en working tree, pas encore committée**).
+- **Prochaine étape :** Phase 5 (suite) — Patrimoine reste : lien visuel actif↔emprunt +
+  purge styles inline ; puis **Flux**, puis **Projection** (habillage). Une sous-PR par page.
+- **Branche en cours :** `main` (Phases 0→4 + Paramètres committées ; **Phase 5/Patrimoine en working tree**).
 
 **État par phase**
 
@@ -611,7 +611,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
 | 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
 | 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
-| 5 — Refonte pages (Patrimoine → Flux → Projection) | ⬜ | — |
+| 5 — Refonte pages (Patrimoine → Flux → Projection) | 🟡 | **Patrimoine (step 1) fait** : familles d'actifs (`lib/assets.ts` : `ASSET_FAMILIES`/`assetFamily`/accents → Immobilier / Épargne & liquidités / Autres), liste **regroupée par famille** + **sous-totaux** valeur + net/an, tri **Valeur/Rendement/Nom**, row extraite en `AssetRow`. **+ camembert** de répartition (`ui/Donut` SVG générique + légende) et **onglets de famille** (filtre de vue « Tout / … »). **Reste :** lien visuel actif↔emprunt, purge styles inline, puis **Flux** et **Projection**. |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
 | 7 — Graphes (SVG poli) | ⬜ | — |
 | 8 — Responsive · a11y · print | ⬜ | — |
