@@ -593,15 +593,15 @@
 .overview-legend {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   width: 100%;
 }
 .overview-legend-row {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 5px 10px;
-  border-radius: 9px;
+  padding: 3px 9px;
+  border-radius: 8px;
   font-size: 13px;
   cursor: default;
   border: 1px solid transparent;

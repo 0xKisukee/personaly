@@ -214,8 +214,8 @@ export default function PatrimoinePage() {
             <Segment aria-label="Trier les actifs" value={sort} onChange={setSort} options={SORT_OPTIONS} />
           )}
           {yearlyNet !== 0 && (
-            <span className="tag" style={{ borderColor: "var(--line-brass)", color: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }}>
-              <span className="dot" style={{ background: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }} /> {signedMoney(yearlyNet)} / an net
+            <span className={"tag tag-brass " + (yearlyNet >= 0 ? "txt-gain" : "txt-drain")}>
+              <span className={"dot " + (yearlyNet >= 0 ? "gain" : "drain")} /> {signedMoney(yearlyNet)} / an net
             </span>
           )}
           <button className="btn btn-brass" onClick={() => setAssetDraft(emptyAsset())}>
@@ -241,7 +241,7 @@ export default function PatrimoinePage() {
                 <span className="fam-total">
                   {money(fam.value)}
                   {fam.net !== 0 && (
-                    <em style={{ color: fam.net >= 0 ? "var(--gain)" : "var(--drain)" }}> · {signedMoney(fam.net)} /an net</em>
+                    <em className={fam.net >= 0 ? "txt-gain" : "txt-drain"}> · {signedMoney(fam.net)} /an net</em>
                   )}
                 </span>
               </div>
@@ -283,7 +283,7 @@ export default function PatrimoinePage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.03 * i, duration: 0.3 }}
               >
-                <div className="row-ic" style={{ color: "var(--drain)" }}>
+                <div className="row-ic txt-drain">
                   <IconDebt size={20} />
                 </div>
                 <div className="row-main">
@@ -299,7 +299,7 @@ export default function PatrimoinePage() {
                     )}
                   </div>
                 </div>
-                <div className="row-val" style={{ color: "var(--drain)" }}>
+                <div className="row-val txt-drain">
                   −{money(l.outstanding)}
                   <div className="flux zero">capital restant dû</div>
                 </div>
@@ -406,14 +406,14 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
           {/* plus-value LATENTE (croissance capitalisée) en € — rend visible le gain du
               growthRate même sans revenu distribué (ex. PEA +7 % → +2 100 €/an). */}
           {a.growthRate !== 0 && (
-            <>· <span style={{ color: perf.latentEur >= 0 ? "var(--gain)" : "var(--drain)" }}>croissance {signedMoney(perf.latentEur)} /an</span></>
+            <>· <span className={perf.latentEur >= 0 ? "txt-gain" : "txt-drain"}>croissance {signedMoney(perf.latentEur)} /an</span></>
           )}
           {a.incomeMode === "rate" && a.incomeRate ? (
-            <>· <span style={{ color: "var(--gain)" }}>revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
+            <>· <span className="txt-gain">revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
           ) : a.incomeMode === "amount" && inc > 0 ? (
-            <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
+            <>· <span className="txt-gain">revenu {money(inc)} /an</span></>
           ) : null}
-          {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
+          {chg > 0 && <>· <span className="txt-drain">charges {money(chg)} /an</span></>}
         </div>
       </div>
       <div className="row-val">
@@ -422,7 +422,7 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
         {perf.netEur === 0 ? (
           <div className="flux zero">stable</div>
         ) : (
-          <div className="flux" style={{ color: perf.netEur >= 0 ? "var(--gain)" : "var(--drain)" }} title={perfTitle}>
+          <div className={"flux " + (perf.netEur >= 0 ? "txt-gain" : "txt-drain")} title={perfTitle}>
             {signedMoney(perf.netEur)} /an
           </div>
         )}

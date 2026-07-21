@@ -49,6 +49,17 @@
   background: rgba(203, 169, 107, 0.08);
 }
 
+/* utilitaires de couleur sémantique (flux/perf) — évitent le style inline dispersé */
+.txt-gain {
+  color: var(--gain);
+}
+.txt-drain {
+  color: var(--drain);
+}
+.tag-brass {
+  border-color: var(--line-brass);
+}
+
 /* langage couleur de performance (§8) — pastille + barre d'accent de ligne */
 .perf-badge {
   display: inline-flex;

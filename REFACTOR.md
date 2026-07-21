@@ -611,7 +611,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
 | 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
 | 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
-| 5 — Refonte pages (Patrimoine → Flux → Projection) | 🟡 | **Patrimoine (step 1) fait** : familles d'actifs (`lib/assets.ts` : `ASSET_FAMILIES`/`assetFamily`/accents → Immobilier / Épargne & liquidités / Autres), liste **regroupée par famille** + **sous-totaux** valeur + net/an, tri **Valeur/Rendement/Nom**, row extraite en `AssetRow`. **+ camembert** de répartition (`ui/Donut` SVG générique + légende) et **onglets de famille** (filtre de vue « Tout / … »). **Reste :** lien visuel actif↔emprunt, purge styles inline, puis **Flux** et **Projection**. |
+| 5 — Refonte pages (Patrimoine → Flux → Projection) | 🟡 | **Patrimoine FAIT** : familles (`ASSET_FAMILIES`/`assetFamily` → Immobilier / Épargne & liquidités / Autres) ; liste **groupée par famille** + sous-totaux (valeur, net/an, **badge de rentabilité agrégée**) ; tri Valeur/Rendement/Nom ; `AssetRow`. **Overview page** : 2 camemberts (`ui/Donut` SVG interactif) Actifs + Passifs, **survol bidirectionnel** donut↔légende (grossit + s'illumine), **palette catégorielle** `--cat-1..5` (hues distincts). **Onglets** Tout/Immobilier/Épargne/Autres/**Passifs** pilotant les 2 sections. **Perf par actif clarifiée** : badge % à côté du nom, meta = croissance €/revenu €/charges €, chiffre à droite = **gain total/an €** (cohérent avec le %). Build + 129 tests verts. **Reste :** lien visuel actif↔emprunt, purge styles inline ; puis **Flux**, **Projection**. |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
 | 7 — Graphes (SVG poli) | ⬜ | — |
 | 8 — Responsive · a11y · print | ⬜ | — |
@@ -647,6 +647,16 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Phase 5 · Patrimoine.** Familles d'actifs + liste groupée + sous-totaux
+  (valeur/net/badge de rentabilité agrégée) ; tri Valeur/Rendement/Nom ; `AssetRow`. Overview
+  page : 2 camemberts `ui/Donut` (SVG interactif, contrôlé via `activeIndex`) Actifs/Passifs,
+  survol **bidirectionnel** donut↔légende (part grossit `GROW` + s'éclaircit, rayon réduit
+  pour ne pas rogner ; ligne de légende active surlignée). Palette catégorielle `--cat-1..5`
+  (contraste — sage/ink-mute/drain-deep étaient trop proches). Onglets Tout/…/**Passifs**
+  pilotant les deux sections. **Perf actif — retour utilisateur :** le badge total incluait la
+  croissance mais le € ne montrait que le cash (piège immo ; PEA « pas de revenu » malgré
+  +7 %). Choix (option minimale) : croissance en € ajoutée dans la meta, puis **chiffre de
+  droite = gain TOTAL/an** (`perf.netEur`), badge % déplacé **à côté du nom**. Build + 129 verts.
 - **2026-07-21 — Paramètres + suppression page Profil (hors-phase, retour utilisateur).**
   Page Profil supprimée (overkill pour nom + date) : route `profil` retirée
   (`routes.tsx`/`App.tsx`), `pages/ProfilPage.tsx` supprimé, eyebrows renumérotés
