@@ -118,6 +118,11 @@ describe("loadState", () => {
     expect(loadState().settings.defaultInflation).toBe(3.5);
   });
 
+  it("horizon devient global : hissé depuis le plan actif si absent de settings", () => {
+    write({ plans: [{ id: "p1", name: "P", projection: { horizon: 40 } }], activePlanId: "p1" });
+    expect(loadState().settings.horizon).toBe(40);
+  });
+
   it("migre la taxonomie d'actifs : livret_epargne & placement → epargne (versements préservés)", () => {
     write({
       assets: [

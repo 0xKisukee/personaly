@@ -21,7 +21,9 @@ export default function Sidebar() {
 
   const selectPlan = (id: string) => {
     update({ activePlanId: id });
-    navigate("/projection");
+    // déjà sur la Projection → on garde la vue courante (Événements, Cash-flow…) ;
+    // sinon on ouvre la Projection (vue par défaut).
+    if (!onProjection) navigate("/projection");
   };
 
   // nouveau plan = DUPLICATION du plan actif (jalons copiés avec les mêmes ids :
@@ -36,7 +38,7 @@ export default function Sidebar() {
       };
       return { ...s, plans: [...s.plans, copy], activePlanId: copy.id };
     });
-    navigate("/projection");
+    if (!onProjection) navigate("/projection");
   };
 
   return (

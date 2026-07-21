@@ -111,6 +111,7 @@ export function migrateState(input: unknown): AppState {
     return {
       ...EMPTY_STATE,
       profile: parsed.profile ?? EMPTY_STATE.profile,
+      settings: { ...DEFAULT_SETTINGS, horizon: plan.projection.horizon ?? DEFAULT_SETTINGS.horizon },
       assets: normalizeAssets(parsed.assets),
       liabilities: normalizeLiabilities(parsed.liabilities),
       incomes: parsed.incomes ?? [],
@@ -136,10 +137,18 @@ export function migrateState(input: unknown): AppState {
   const activePlanId = plans.some((pl) => pl.id === parsed.activePlanId)
     ? parsed.activePlanId
     : plans[0].id;
+  // horizon devient GLOBAL : on le hisse depuis le plan actif si l'état d'avant
+  // ne le portait pas encore dans settings (continuité pour l'utilisateur).
+  const activePlan = plans.find((pl) => pl.id === activePlanId) ?? plans[0];
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    ...(parsed.settings ?? {}),
+    horizon: parsed.settings?.horizon ?? activePlan.projection.horizon ?? DEFAULT_SETTINGS.horizon,
+  };
   return {
     ...EMPTY_STATE,
     ...parsed,
-    settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+    settings,
     assets: normalizeAssets(parsed.assets),
     liabilities: normalizeLiabilities(parsed.liabilities),
     plans,

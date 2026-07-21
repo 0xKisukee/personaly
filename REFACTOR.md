@@ -618,6 +618,12 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
+- **Horizon de projection = GLOBAL** (`settings.horizon`), pas par plan : c'est une préférence
+  de vue (les plans se comparent sur le même horizon). `ProjectionPage` fusionne
+  `{ ...plan.projection, horizon: settings.horizon }`. Migration : hissé depuis le plan actif.
+- **Vue de projection conservée au changement de plan** : `Sidebar.selectPlan/addPlan` ne
+  navigue vers `/projection` que si on n'y est pas déjà (sinon la vue courante — portée par
+  l'URL `/projection/:vue` — est préservée).
 - **Modales portées vers `document.body`** (`createPortal`). Un ancêtre avec
   `backdrop-filter`/`transform` (ex. sidebar) devient le bloc conteneur d'un `position: fixed`
   et enferme la modale. Ne pas rendre de scrim plein écran sous un tel ancêtre sans portail.

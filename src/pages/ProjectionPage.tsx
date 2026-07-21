@@ -38,7 +38,14 @@ const VIEWS: { id: ViewId; label: string }[] = [
  */
 export default function ProjectionPage() {
   const { state, plan, update, updatePlan } = useStore();
-  const p = plan.projection;
+  // horizon PARTAGÉ (settings) : identique quel que soit le plan actif ; le reste
+  // des hypothèses (inflation, rendement…) reste propre à chaque plan.
+  const p = useMemo(
+    () => ({ ...plan.projection, horizon: state.settings.horizon }),
+    [plan.projection, state.settings.horizon]
+  );
+  const setHorizon = (horizon: number) =>
+    update((s) => ({ ...s, settings: { ...s.settings, horizon } }));
   // vue active portée par l'URL (`/projection/:vue`) : deep-link + refresh sans perte.
   const { vue } = useParams();
   const navigate = useNavigate();
@@ -123,7 +130,7 @@ export default function ProjectionPage() {
           <Segment
             aria-label="Horizon de projection"
             value={p.horizon}
-            onChange={(horizon) => setP({ horizon })}
+            onChange={setHorizon}
             options={HORIZONS.map((h) => ({ value: h, label: `${h} ans` }))}
           />
         }
