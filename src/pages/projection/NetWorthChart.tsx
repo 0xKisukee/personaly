@@ -82,6 +82,34 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
     (msByIdx.get(idx) ?? msByIdx.set(idx, []).get(idx)!).push(m);
   }
 
+  // Placement anti-collision des libellés de jalons : deux jalons d'années PROCHES
+  // ont des libellés qui se chevauchent horizontalement (ex. « arrivée rania » / « mariage »).
+  // On empile alors le second sur une ligne (row) plus basse. Empaquetage glouton par x
+  // croissant : chaque row retient le bord droit occupé ; un groupe se place sur la 1re row
+  // libre (et réserve autant de rows que sa hauteur, si plusieurs jalons la même année).
+  const MS_CHAR = 7.2; // largeur approx. d'un caractère (police .chart-axis)
+  const MS_LINE = 14; // hauteur d'une ligne de libellé
+  const MS_DIAM = 8; // demi-largeur réservée au losange ◇ (centré sur la ligne)
+  const MS_GAP = 9; // écart ◇ ↔ libellé
+  const msLayout = new Map<number, number>(); // idx année → row (offset vertical)
+  const rowRightEdge: number[] = [];
+  for (const [idx, list] of [...msByIdx.entries()].sort((a, b) => a[0] - b[0])) {
+    const mx = x(idx);
+    const flip = mx > W - M.right - 90;
+    const labelPx = Math.max(...list.map((m) => (m.label || "Jalon").length)) * MS_CHAR;
+    // intervalle occupé : le losange (± MS_DIAM autour de mx) ET le libellé à côté
+    const x0 = flip ? mx - MS_GAP - labelPx : mx - MS_DIAM;
+    const x1 = flip ? mx + MS_DIAM : mx + MS_GAP + labelPx;
+    let row = 0;
+    for (;;) {
+      let ok = true;
+      for (let k = 0; k < list.length; k++) if ((rowRightEdge[row + k] ?? -Infinity) > x0 - 6) { ok = false; break; }
+      if (ok) { for (let k = 0; k < list.length; k++) rowRightEdge[row + k] = x1; break; }
+      row++;
+    }
+    msLayout.set(idx, row);
+  }
+
   // marqueurs d'événements, empilés quand plusieurs tombent la même année
   const marksByYear = new Map<number, ProjectionEvent[]>();
   for (const e of events) {
@@ -135,17 +163,24 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
         {[...msByIdx.entries()].map(([idx, list]) => {
           const mx = x(idx);
           const flip = mx > W - M.right - 90; // le libellé sortirait du graphe
+          const row = msLayout.get(idx) ?? 0; // décalage vertical anti-collision
           return (
             <g key={idx}>
               <line x1={mx} x2={mx} y1={M.top} y2={M.top + innerH}
                 stroke="var(--sage)" strokeWidth="1" strokeDasharray="2 6" strokeOpacity="0.75" />
-              <text x={mx} y={M.top + 4} textAnchor="middle" className="chart-axis" style={{ fill: "var(--sage)" }}>◇</text>
-              {list.map((m, j) => (
-                <text key={m.id} x={flip ? mx - 9 : mx + 9} y={M.top + 4 + j * 14} textAnchor={flip ? "end" : "start"}
-                  className="chart-axis" style={{ fill: "var(--sage)" }}>
-                  {m.label || "Jalon"}
-                </text>
-              ))}
+              {/* un ◇ PAR jalon, aligné avec son libellé (empilés sur la ligne si même année) */}
+              {list.map((m, j) => {
+                const ly = M.top + 4 + (row + j) * MS_LINE;
+                return (
+                  <g key={m.id}>
+                    <text x={mx} y={ly} textAnchor="middle" className="chart-axis" style={{ fill: "var(--sage)" }}>◇</text>
+                    <text x={flip ? mx - MS_GAP : mx + MS_GAP} y={ly} textAnchor={flip ? "end" : "start"}
+                      className="chart-axis" style={{ fill: "var(--sage)" }}>
+                      {m.label || "Jalon"}
+                    </text>
+                  </g>
+                );
+              })}
             </g>
           );
         })}
@@ -184,7 +219,9 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
             (jamais sous l'infobulle qui suit la courbe) ; cliquables si planifiés.
             Décalés SOUS les libellés de jalons de la même année pour ne pas les recouvrir. */}
         {[...marksByYear.entries()].map(([yi, list]) => {
-          const msOffset = (msByIdx.get(yi)?.length ?? 0) * 14; // hauteur des libellés de jalons
+          // sous le bas des libellés de jalons de cette année (row de base + nb de jalons)
+          const msList = msByIdx.get(yi);
+          const msOffset = msList ? ((msLayout.get(yi) ?? 0) + msList.length) * MS_LINE : 0;
           return list.map((e, j) => {
             const cx = x(yi);
             const cy = M.top + 14 + msOffset + j * 22;
