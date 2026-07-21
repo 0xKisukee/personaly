@@ -591,9 +591,17 @@ Historique conservé — question → **ta réponse** → décision appliquée d
 Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 
 **Reprise rapide**
-- **Dernière session :** ✅ **Phase 2 (Taxonomie d'actifs)** terminée. Nouvelles catégories (`epargne` = fusion livret+placement, `liquidites`), flag `rented` (immobilier), registre `lib/assets.ts` (méta + presets + champs par type + `normalizeAsset`), `AssetModal` piloté par le registre (presets, bascule loué, blocs conditionnels), migration store, EventModal/eventHelpers/MonteCarloView reliés au registre. Build + **125 tests** verts (dont invariants taxonomie), boot OK.
-- **Prochaine étape :** Phase 3 — Langage couleur de performance (métrique `assetPerformance`, tokens divergents, `PerformanceBadge`, `Sparkline`). ⚠️ **`--gain`/`--drain` = performance réelle par actif**, jamais l'identité de catégorie (déjà corrigé dans les accents du registre).
-- **Branche en cours :** `main` (Phases 0+1 committées ; **Phase 2 en working tree, pas encore committée**).
+- **Dernière session :** ✅ **Phase 3 (Langage couleur de performance)**. Métrique
+  `assetPerformance()` (total = croissance + rendement distribué net / valeur) dans
+  `selectors.ts` ; tokens divergents `--perf-*` (drain→neutre→gain, 3 paliers via
+  `color-mix`) ; primitive `PerformanceBadge` (+ `perfColor`) ; appliqués à la liste
+  Patrimoine (barre d'accent gauche + badge) avec **tri Ordre/Rendement/Valeur**. Build +
+  **127 tests** verts, boot OK. **Sparkline retirée** (sans échelle = inutile ; incohérence
+  couleur/direction sur un actif qui s'apprécie mais coûte net). **NB modèle :**
+  `compte_courant` **supprimé** (fusionné dans `liquidites`) — seul `epargne` reçoit les versements.
+- **Prochaine étape :** Phase 4 — Dashboard (route `/`, hero patrimoine + répartition colorée
+  par la perf + mini-projection). Réutilise `assetPerformance`/`perfColor`/`Sparkline`.
+- **Branche en cours :** `main` (Phases 0+1+2 committées ; **Phase 3 en working tree, pas encore committée**).
 
 **État par phase**
 
@@ -602,7 +610,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 0 — Socle (routeur, export/import, garde-fous) | ✅ | `react-router-dom` (BrowserRouter) ; `routes.tsx` ; `migrateState`/`serializeState`/`importState` ; contrôles données + indicateur « Enregistré » en sidebar ; vue Projection portée par `/projection/:vue`. |
 | 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ✅ (structurel) | `styles/{tokens,base,primitives,layout,charts}.css` (split contigu iso-visuel) ; `ui/{Button,Input,MoneyInput,Field,Select,Segment,Card,Tag}` + barrel ; Profil migré. **Reste optionnel :** `Stat`/`Tooltip`/`Row` + déplacer `Modal`→`ui/` (différés en phase 5, avec vrais consommateurs) ; rafraîchissement de palette §12 (non appliqué, on est resté iso-visuel). |
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
-| 3 — Couleur de performance | ⬜ | — |
+| 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
 | 4 — Dashboard | ⬜ | — |
 | 5 — Refonte pages (Patrimoine → Flux → Projection) | ⬜ | — |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
@@ -630,6 +638,22 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Phase 3 (Langage couleur de perf).** `selectors.ts` : `assetPerformance(a)`
+  → `{ pct, latentPct, cashPct, latentEur, cashEur, netEur }` (total = growthRate + revenu
+  net/valeur, garde value=0) ; `assetValueSeries(a, years)` (compose + plancher, pour la
+  Sparkline). `tokens.css` : `--perf-neutral` + `--perf-gain-1..3` / `--perf-drain-1..3`
+  dérivés de `--gain`/`--drain` via `color-mix(oklab)` (sobre, 3 paliers d'amplitude).
+  Primitive : `ui/PerformanceBadge` (flèche ↗/↘/→ + valeur signée, + `perfColor(pct)`
+  partagé). PatrimoinePage : barre d'accent de perf à gauche (absolute, hors grille .row) +
+  `PerformanceBadge` dans la meta ; tri de vue Ordre/Rendement/Valeur (Segment, ne mute pas
+  le store). Tests `assetPerformance` → 127 verts. **Sparkline abandonnée** en cours de route
+  (retour utilisateur : sans échelle elle n'apporte rien, et colorer une trajectoire de
+  valeur par la perf TOTALE crée un contresens — RP qui s'apprécie mais coûte net → ligne
+  qui monte en rouge). Helper `assetValueSeries` + primitive `Sparkline` supprimés.
+  **Décision utilisateur (en parallèle) :**
+  `compte_courant` **supprimé** du modèle, fusionné dans `liquidites` (migration store
+  `compte_courant → liquidites`) ; `DEPOSIT_ELIGIBLE = ["epargne"]` (seule l'épargne reçoit
+  les versements). Registre/tests adaptés.
 - **2026-07-20 — Phase 2 (Taxonomie d'actifs).** Modèle (`types.ts`) : `AssetCategory`
   refondu (`epargne` = fusion `livret_epargne`+`placement` ; `liquidites` neuf), flag
   `rented?` sur `Asset`, `DEPOSIT_ELIGIBLE = [compte_courant, epargne]`. Registre

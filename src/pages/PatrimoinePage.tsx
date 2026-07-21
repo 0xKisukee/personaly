@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { useStore } from "../lib/store";
 import type {
@@ -17,6 +17,7 @@ import {
   type AssetPreset,
 } from "../lib/assets";
 import {
+  assetPerformance,
   assetYearlyIncome,
   assetYearlyNet,
   grossWealth,
@@ -27,7 +28,15 @@ import { money, signedMoney, percent, uid, toYearly } from "../lib/format";
 import { monthlyPayment, formatDuration, formatEndDate } from "../lib/finance";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import { PerformanceBadge, perfColor, Segment } from "../ui";
 import { IconBox, IconDebt, IconEdit, IconPlus, IconTrash } from "../components/icons";
+
+type AssetSort = "ordre" | "perf" | "valeur";
+const SORT_OPTIONS: { value: AssetSort; label: string }[] = [
+  { value: "ordre", label: "Ordre" },
+  { value: "perf", label: "Rendement" },
+  { value: "valeur", label: "Valeur" },
+];
 
 const LIAB_META: Record<LiabilityCategory, { label: string }> = {
   emprunt_immo: { label: "Emprunt immobilier" },
@@ -53,11 +62,21 @@ export default function PatrimoinePage() {
   const [assetDraft, setAssetDraft] = useState<Asset | null>(null);
   const [liabDraft, setLiabDraft] = useState<Liability | null>(null);
 
+  const [sort, setSort] = useState<AssetSort>("ordre");
+
   const gross = grossWealth(state);
   const liab = totalLiabilities(state);
   const net = netWealth(state);
   // revenu NET (revenus distribués − charges de détention) : le vrai bénéfice du patrimoine
   const yearlyNet = state.assets.reduce((s, a) => s + assetYearlyNet(a), 0);
+
+  // ordre d'affichage (n'altère pas le store — tri de vue seulement)
+  const sortedAssets = useMemo(() => {
+    const list = state.assets.map((a, i) => ({ a, i }));
+    if (sort === "perf") list.sort((x, y) => assetPerformance(y.a).pct - assetPerformance(x.a).pct);
+    else if (sort === "valeur") list.sort((x, y) => (y.a.value || 0) - (x.a.value || 0));
+    return list.map((x) => x.a);
+  }, [state.assets, sort]);
 
   const saveAsset = (raw: Asset) => {
     // coupe les champs qu'une catégorie n'expose pas (revenu d'un immo « non loué »…)
@@ -130,6 +149,9 @@ export default function PatrimoinePage() {
           <h2>Actifs</h2>
           <span className="count">{state.assets.length}</span>
           <span className="spacer" />
+          {state.assets.length > 1 && (
+            <Segment aria-label="Trier les actifs" value={sort} onChange={setSort} options={SORT_OPTIONS} />
+          )}
           {yearlyNet !== 0 && (
             <span className="tag" style={{ borderColor: "var(--line-brass)", color: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }}>
               <span className="dot" style={{ background: yearlyNet >= 0 ? "var(--gain)" : "var(--drain)" }} /> {signedMoney(yearlyNet)} / an net
@@ -147,11 +169,17 @@ export default function PatrimoinePage() {
           </div>
         ) : (
           <div className="rows">
-            {state.assets.map((a, i) => {
+            {sortedAssets.map((a, i) => {
               const Meta = assetType(a.category);
               const inc = assetYearlyIncome(a);
               const chg = toYearly(a.charges);
               const net = inc - chg; // bénéfice réel de détention
+              const perf = assetPerformance(a);
+              const perfCol = perfColor(perf.pct);
+              const sp = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${percent(Math.abs(x))}`;
+              const perfTitle =
+                `Rendement total ${sp(perf.pct)} /an` +
+                (perf.cashPct ? ` · valeur ${sp(perf.latentPct)} · distribué net ${sp(perf.cashPct)}` : "");
               return (
                 <motion.div
                   key={a.id}
@@ -160,6 +188,8 @@ export default function PatrimoinePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.03 * i, duration: 0.3 }}
                 >
+                  {/* accent de performance de la ligne (§8) */}
+                  <span className="perf-bar" style={{ background: perfCol }} aria-hidden />
                   <div className="row-ic">
                     <Meta.icon size={20} />
                   </div>
@@ -173,11 +203,7 @@ export default function PatrimoinePage() {
                         <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
                       ) : null}
                       {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
-                      {a.growthRate !== 0 && (
-                        <span className="tag" style={{ color: a.growthRate < 0 ? "var(--drain)" : "var(--sage)" }}>
-                          {a.growthRate > 0 ? "↗" : "↘"} valeur {a.growthRate > 0 ? "+" : ""}{percent(a.growthRate)}/an
-                        </span>
-                      )}
+                      {(perf.pct !== 0 || a.growthRate !== 0) && <PerformanceBadge pct={perf.pct} title={perfTitle} />}
                     </div>
                   </div>
                   <div className="row-val">

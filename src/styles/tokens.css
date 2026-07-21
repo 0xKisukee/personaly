@@ -33,6 +33,17 @@
   --drain: #d59873;
   --drain-deep: #b06f4d;
 
+  /* perf — langage couleur de performance (§8) : échelle divergente
+     drain → neutre → gain, 3 paliers d'intensité DÉRIVÉS des tokens sémantiques
+     (via color-mix) pour rester sobres et cohérents, jamais criards. */
+  --perf-neutral: var(--ink-mute);
+  --perf-gain-1: color-mix(in oklab, var(--gain) 60%, var(--ink-mute));
+  --perf-gain-2: var(--gain);
+  --perf-gain-3: color-mix(in oklab, var(--gain), white 18%);
+  --perf-drain-1: color-mix(in oklab, var(--drain) 60%, var(--ink-mute));
+  --perf-drain-2: var(--drain);
+  --perf-drain-3: color-mix(in oklab, var(--drain), white 14%);
+
   /* lines */
   --line: rgba(243, 239, 228, 0.08);
   --line-strong: rgba(243, 239, 228, 0.14);

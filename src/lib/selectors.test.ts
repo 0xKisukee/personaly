@@ -8,6 +8,7 @@ import {
   loanInterestYearly, loanPrincipalYearly, loanPaymentsYearly,
   expensesYearly, assetChargesYearly, loanInsuranceYearly,
   inflowsYearly, outflowsYearly, enrichmentYearly, realizedEnrichmentYearly,
+  assetPerformance,
 } from "./selectors";
 import { monthlyPayment } from "./finance";
 
@@ -20,6 +21,27 @@ const state = (over: Partial<AppState>): AppState => ({
   profile: { firstName: "", birthDate: "" },
   assets: [], liabilities: [], incomes: [], expenses: [],
   plans: [DEFAULT_PLAN], activePlanId: DEFAULT_PLAN.id, ...over,
+});
+
+describe("assetPerformance (langage couleur de perf)", () => {
+  it("total = croissance capitalisée + rendement distribué net (rapporté à la valeur)", () => {
+    // 200 000 €, +2 %/an de valeur, loyer 600/mois (7 200/an) − 1 200/an de charges
+    const a = asset({
+      value: 200_000, growthRate: 2, incomeMode: "amount",
+      income: { amount: 600, period: "monthly" }, charges: { amount: 1_200, period: "yearly" },
+    });
+    const p = assetPerformance(a);
+    expect(p.latentPct).toBe(2);
+    expect(p.cashEur).toBe(6_000); // 7 200 − 1 200
+    expect(p.cashPct).toBeCloseTo(3, 5); // 6 000 / 200 000
+    expect(p.pct).toBeCloseTo(5, 5); // 2 + 3
+    expect(p.netEur).toBeCloseTo(10_000, 5); // 4 000 latent + 6 000 cash
+  });
+
+  it("actif qui coûte (charges > revenu) → perf négative ; valeur 0 → cashPct 0 (pas de division)", () => {
+    expect(assetPerformance(asset({ value: 300_000, growthRate: 0, charges: { amount: 3_000, period: "yearly" } })).pct).toBeCloseTo(-1, 5);
+    expect(assetPerformance(asset({ value: 0, growthRate: 5 })).cashPct).toBe(0);
+  });
 });
 
 describe("patrimoine", () => {

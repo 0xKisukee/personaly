@@ -21,6 +21,30 @@ export function assetYearlyNet(a: Asset): number {
   return assetYearlyIncome(a) - toYearly(a.charges);
 }
 
+/**
+ * Rendement TOTAL annuel d'un actif = part capitalisée (croissance) + part distribuée
+ * nette (revenu − charges, rapportée à la valeur). C'est la métrique du langage couleur
+ * de performance (§8) : positif = productif/s'apprécie, négatif = coûte/se déprécie,
+ * ≈0 = dormant. Toutes les parts sont exposées pour l'info-bulle et le tri.
+ */
+export interface AssetPerformance {
+  pct: number; // rendement total annuel (%)
+  latentPct: number; // part capitalisée (%) = growthRate
+  cashPct: number; // part distribuée nette (%) rapportée à la valeur
+  latentEur: number; // €/an capitalisés (plus/moins-value latente)
+  cashEur: number; // €/an distribués nets (revenu − charges)
+  netEur: number; // €/an total (latent + cash)
+}
+
+export function assetPerformance(a: Asset): AssetPerformance {
+  const v = a.value || 0;
+  const latentEur = assetYearlyGrowth(a);
+  const cashEur = assetYearlyNet(a);
+  const latentPct = a.growthRate || 0;
+  const cashPct = v > 0 ? (cashEur / v) * 100 : 0;
+  return { pct: latentPct + cashPct, latentPct, cashPct, latentEur, cashEur, netEur: latentEur + cashEur };
+}
+
 export function grossWealth(s: AppState): number {
   return s.assets.reduce((sum, a) => sum + (a.value || 0), 0);
 }

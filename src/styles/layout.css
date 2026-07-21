@@ -314,6 +314,7 @@
   gap: 8px;
 }
 .row {
+  position: relative; /* ancre la barre d'accent de perf (.perf-bar, hors grille) */
   display: grid;
   grid-template-columns: 40px 1fr auto auto;
   align-items: center;
