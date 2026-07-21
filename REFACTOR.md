@@ -598,9 +598,11 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   taux d'épargne, **répartition** des actifs (barres teintées par la perf), **à venir**
   (prochain jalon / événement). État vide → CTA « Commence par ton patrimoine ». Build +
   **127 tests** verts, boot OK.
-- **Prochaine étape :** Phase 5 (suite) — Patrimoine reste : lien visuel actif↔emprunt +
-  purge styles inline ; puis **Flux**, puis **Projection** (habillage). Une sous-PR par page.
-- **Branche en cours :** `main` (Phases 0→4 + Paramètres committées ; **Phase 5/Patrimoine en working tree**).
+- **Prochaine étape :** Phase 5 — **Projection** (habillage : barre de plan, panneau
+  d'hypothèses, légende des glyphes, cohérence couleurs perf table) sans toucher au moteur.
+- **Branche en cours :** `main`. Committé jusqu'à `0af20f7 phase 5 - flux` (Patrimoine +
+  Flux). Worktree de comparaison « avant » : `/Users/aymane/Projects/personaly-before` (`ca064ea`).
+  Lien actif↔emprunt **abandonné** (retour utilisateur).
 
 **État par phase**
 
@@ -611,7 +613,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
 | 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
 | 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
-| 5 — Refonte pages (Patrimoine → Flux → Projection) | 🟡 | **Patrimoine FAIT** : familles (`ASSET_FAMILIES`/`assetFamily` → Immobilier / Épargne & liquidités / Autres) ; liste **groupée par famille** + sous-totaux (valeur, net/an, **badge de rentabilité agrégée**) ; tri Valeur/Rendement/Nom ; `AssetRow`. **Overview page** : 2 camemberts (`ui/Donut` SVG interactif) Actifs + Passifs, **survol bidirectionnel** donut↔légende (grossit + s'illumine), **palette catégorielle** `--cat-1..5` (hues distincts). **Onglets** Tout/Immobilier/Épargne/Autres/**Passifs** pilotant les 2 sections. **Perf par actif clarifiée** : badge % à côté du nom, meta = croissance €/revenu €/charges €, chiffre à droite = **gain total/an €** (cohérent avec le %). Build + 129 tests verts. **Reste :** lien visuel actif↔emprunt, purge styles inline ; puis **Flux**, **Projection**. |
+| 5 — Refonte pages (Patrimoine → Flux → Projection) | 🟡 | **Patrimoine + Flux FAITS** ; reste **Projection**. **Flux** (compta inchangée) : purge styles inline → utilitaires `.txt-*`/`.tag-brass` ; toggles + select via `Segment`/`Select` ; hiérarchie sous-groupes (totaux alignés à droite + séparateurs) ; **onglets Tout/Entrants/Sortants**. — **Patrimoine FAIT** : familles (`ASSET_FAMILIES`/`assetFamily` → Immobilier / Épargne & liquidités / Autres) ; liste **groupée par famille** + sous-totaux (valeur, net/an, **badge de rentabilité agrégée**) ; tri Valeur/Rendement/Nom ; `AssetRow`. **Overview page** : 2 camemberts (`ui/Donut` SVG interactif) Actifs + Passifs, **survol bidirectionnel** donut↔légende (grossit + s'illumine), **palette catégorielle** `--cat-1..5` (hues distincts). **Onglets** Tout/Immobilier/Épargne/Autres/**Passifs** pilotant les 2 sections. **Perf par actif clarifiée** : badge % à côté du nom, meta = croissance €/revenu €/charges €, chiffre à droite = **gain total/an €** (cohérent avec le %). Build + 129 tests verts. **Reste :** lien visuel actif↔emprunt, purge styles inline ; puis **Flux**, **Projection**. |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
 | 7 — Graphes (SVG poli) | ⬜ | — |
 | 8 — Responsive · a11y · print | ⬜ | — |
