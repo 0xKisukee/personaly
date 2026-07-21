@@ -269,6 +269,53 @@
   flex: none;
 }
 
+/* pile de tooltips centrée sur le curseur, remontant au-dessus du point survolé :
+   [pastilles jalon/événement] au-dessus de [tooltip de valeur] */
+.chart-tip-stack {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 14px));
+  pointer-events: none;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tip-stack .chart-tip {
+  position: static; /* dans la pile, le tooltip de valeur suit le flux (pas d'absolu) */
+  transform: none;
+}
+.chart-markers-tip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.chart-marker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 13px 5px 6px;
+  border-radius: 999px;
+  background: var(--panel-hi);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-soft);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.chart-marker-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  border: 1px solid;
+  background: var(--panel);
+  flex: none;
+}
+
 .proj-events {
   display: flex;
   flex-wrap: wrap;

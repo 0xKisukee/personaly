@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { simInput, DEFAULT_PLAN, DEFAULT_PROJECTION } from "../lib/types";
+import { simInput } from "../lib/types";
 import { project } from "../lib/projection";
 import {
   netWealth, grossWealth, totalLiabilities,
@@ -10,19 +10,15 @@ import {
   loanPaymentsYearly, loanInsuranceYearly, assetPerformance,
 } from "../lib/selectors";
 import { assetType } from "../lib/assets";
-import { money, signedMoney, percent } from "../lib/format";
+import { money, signedMoney, percent, ageFrom } from "../lib/format";
 import PageHeader from "../components/PageHeader";
+import NetWorthChart from "./projection/NetWorthChart";
 import { perfColor } from "../ui";
 import { IconChevron, IconPlus } from "../components/icons";
 
-const HORIZON = 10;
-
 export default function DashboardPage() {
-  // L'Accueil ignore VOLONTAIREMENT les plans (hypothétiques → page Projection) : il
-  // montre la trajectoire de BASE, tes finances actuelles évoluant au fil des flux.
-  const { state } = useStore();
+  const { state, update } = useStore();
   const navigate = useNavigate();
-  const nowYear = new Date().getFullYear();
 
   const gross = grossWealth(state);
   const liab = totalLiabilities(state);
@@ -31,56 +27,48 @@ export default function DashboardPage() {
   const hasData =
     gross > 0 || liab > 0 || state.incomes.length > 0 || state.expenses.length > 0;
 
-  // projection de BASE (sans plan : aucun événement/jalon, hypothèses par défaut),
-  // une seule passe du moteur mémoïsée → net à +1/+5/+10 ans.
-  const horizons = useMemo(() => {
-    if (!hasData) return null;
-    const base = { ...DEFAULT_PLAN, milestones: [], events: [] };
-    const params = { ...DEFAULT_PROJECTION, inflation: state.settings.defaultInflation, horizon: HORIZON };
-    const { points } = project(simInput(state, base), params);
-    const at = (i: number) => points.find((p) => p.yearIndex === i)?.netWorth ?? null;
-    return [1, 5, 10].map((y) => ({ y, net: at(y) }));
-  }, [state, hasData]);
-
-  // flux courants (annuels → mensuels) + taux d'épargne cash
+  // flux courants (annuels → mensuels) + taux d'épargne cash — BASE (sans plan)
   const income = cashInflowsYearly(state);
   const spend =
     expensesYearly(state) + assetChargesYearly(state) + loanPaymentsYearly(state) + loanInsuranceYearly(state);
   const saved = income - spend;
   const savingsRate = income > 0 ? saved / income : 0;
 
-  // répartition : top actifs par valeur, part du brut, teintés par leur perf
+  // répartition : top actifs par valeur, part du brut, teintés par leur perf — BASE
   const alloc = useMemo(
     () => [...state.assets].sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, 6),
     [state.assets]
   );
 
-  // « À venir » de la trajectoire de BASE (indépendant des plans) : flux datés qui
-  // démarrent/s'arrêtent (bornes en dur uniquement, pas d'ancrage jalon) + emprunts soldés.
-  const upcoming = useMemo(() => {
-    const out: { year: number; label: string }[] = [];
-    for (const i of state.incomes) {
-      if (i.startYear && i.startYear > nowYear) out.push({ year: i.startYear, label: `${i.label || "Revenu"} démarre` });
-      if (i.endYear && i.endYear >= nowYear) out.push({ year: i.endYear, label: `${i.label || "Revenu"} se termine` });
-    }
-    for (const e of state.expenses) {
-      if (e.startYear && e.startYear > nowYear) out.push({ year: e.startYear, label: `${e.label || "Dépense"} démarre` });
-      if (e.endYear && e.endYear >= nowYear) out.push({ year: e.endYear, label: `${e.label || "Dépense"} se termine` });
-    }
-    for (const l of state.liabilities) {
-      if (l.termMonths && l.termMonths > 0) {
-        out.push({ year: nowYear + Math.round(l.termMonths / 12), label: `${l.label || "Emprunt"} soldé` });
-      }
-    }
-    return out.sort((a, b) => a.year - b.year).slice(0, 3);
-  }, [state.incomes, state.expenses, state.liabilities, nowYear]);
+  // horizon des aperçus de l'Accueil = jusqu'à une cible d'âge (indépendant de la timeframe
+  // de Projection) : 60 ans si < 40, 80 si 40–60, 100 si 60–80, 120 si > 80 (défaut 40 ans sans âge).
+  const previewHorizon = useMemo(() => {
+    const age = ageFrom(state.profile.birthDate);
+    if (age == null) return 40;
+    const target = age < 40 ? 60 : age < 60 ? 80 : age < 80 ? 100 : 120;
+    return Math.max(1, target - age);
+  }, [state.profile.birthDate]);
+
+  // aperçu par PLAN : une projection par plan (jusqu'à la cible d'âge), pour la mini-courbe + jalons
+  const planPreviews = useMemo(() => {
+    if (!hasData) return [];
+    return state.plans.map((pl) => {
+      const { points, events } = project(simInput(state, pl), { ...pl.projection, horizon: previewHorizon });
+      return { plan: pl, points, events };
+    });
+  }, [state, hasData, previewHorizon]);
+
+  const openPlan = (id: string) => {
+    update({ activePlanId: id });
+    navigate("/projection");
+  };
 
   return (
     <>
       <PageHeader
         eyebrow="00 — Accueil"
         title={<>Ton patrimoine, <em>en un coup d'œil</em></>}
-        lede="Vue d'ensemble : où en est ton patrimoine aujourd'hui, sa trajectoire, et ce qui arrive ensuite."
+        lede="Vue d'ensemble : où en est ton patrimoine aujourd'hui, et où le mènent tes plans."
       />
 
       {!hasData ? (
@@ -125,51 +113,8 @@ export default function DashboardPage() {
           </motion.div>
 
           <div className="dash-grid">
-            {/* trajectoire projetée */}
-            <DashCard title="Trajectoire" hint="voir la projection" onClick={() => navigate("/projection")} delay={0.05}>
-              <div className="dash-horizons">
-                {horizons?.map(({ y, net: n }) => {
-                  const d = n != null ? n - net : 0;
-                  return (
-                    <div className="dash-horizon" key={y}>
-                      <div className="dash-horizon-y">+{y} an{y > 1 ? "s" : ""}</div>
-                      <div className="dash-horizon-v">{n != null ? money(n) : "—"}</div>
-                      <div className="dash-horizon-d" style={{ color: d >= 0 ? "var(--gain)" : "var(--drain)" }}>
-                        {signedMoney(d)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="hint" style={{ marginTop: 14 }}>
-                <span className="dot brass" /> Au fil de tes flux actuels · valeur composée, emprunts amortis. Les plans se simulent dans Projection.
-              </div>
-            </DashCard>
-
-            {/* flux courants */}
-            <DashCard title="Flux mensuels" hint="détailler les flux" onClick={() => navigate("/flux")} delay={0.1}>
-              <div className="dash-flux">
-                <div><span>Revenus</span><b style={{ color: "var(--gain)" }}>{money(income / 12)}</b></div>
-                <div><span>Sorties</span><b style={{ color: "var(--drain)" }}>{money(spend / 12)}</b></div>
-                <div className="dash-flux-total">
-                  <span>Épargne / mois</span>
-                  <b style={{ color: saved >= 0 ? "var(--gain)" : "var(--drain)" }}>{signedMoney(saved / 12)}</b>
-                </div>
-              </div>
-              {income > 0 && (
-                <div className="dash-rate">
-                  <div className="dash-rate-bar">
-                    <span style={{ width: `${Math.max(0, Math.min(100, savingsRate * 100))}%` }} />
-                  </div>
-                  <div className="dash-rate-label">
-                    Taux d'épargne <b>{percent(Math.round(savingsRate * 100))}</b>
-                  </div>
-                </div>
-              )}
-            </DashCard>
-
             {/* répartition */}
-            <DashCard title="Répartition" hint="gérer les actifs" onClick={() => navigate("/patrimoine")} delay={0.15}>
+            <DashCard title="Répartition" hint="gérer les actifs" onClick={() => navigate("/patrimoine")} delay={0.05}>
               {alloc.length === 0 ? (
                 <div className="dash-muted">Aucun actif pour l'instant.</div>
               ) : (
@@ -193,28 +138,66 @@ export default function DashboardPage() {
               )}
             </DashCard>
 
-            {/* à venir : changements de la trajectoire de base (flux datés, emprunts soldés) */}
-            <DashCard title="À venir" hint="gérer les flux" onClick={() => navigate("/flux")} delay={0.2}>
-              {upcoming.length === 0 ? (
-                <div className="dash-muted">
-                  Rien de daté au fil de tes flux actuels. Ajoute une date de début/fin à un revenu ou une dépense pour l'anticiper ici.
+            {/* flux courants */}
+            <DashCard title="Flux mensuels" hint="détailler les flux" onClick={() => navigate("/flux")} delay={0.1}>
+              <div className="dash-flux">
+                <div><span>Revenus</span><b className="txt-gain">{money(income / 12)}</b></div>
+                <div><span>Sorties</span><b className="txt-drain">{money(spend / 12)}</b></div>
+                <div className="dash-flux-total">
+                  <span>Épargne / mois</span>
+                  <b className={saved >= 0 ? "txt-gain" : "txt-drain"}>{signedMoney(saved / 12)}</b>
                 </div>
-              ) : (
-                <div className="dash-next">
-                  {upcoming.map((u, k) => {
-                    const away = u.year - nowYear;
-                    return (
-                      <div className="dash-next-item" key={k}>
-                        <div className="dash-next-v">
-                          {u.label} <span>· {u.year} {away === 0 ? "(cette année)" : `(${away} an${away > 1 ? "s" : ""})`}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+              </div>
+              {income > 0 && (
+                <div className="dash-rate">
+                  <div className="dash-rate-bar">
+                    <span style={{ width: `${Math.max(0, Math.min(100, savingsRate * 100))}%` }} />
+                  </div>
+                  <div className="dash-rate-label">
+                    Taux d'épargne <b>{percent(Math.round(savingsRate * 100))}</b>
+                  </div>
                 </div>
               )}
             </DashCard>
           </div>
+
+          {/* aperçu de chaque plan : mini-courbe + jalons (clique → ouvre la Projection) */}
+          {planPreviews.length > 0 && (
+            <section className="section">
+              <div className="section-head">
+                <h2>Plans</h2>
+                <span className="count">{planPreviews.length}</span>
+                <span className="spacer" />
+                <span className="hint"><span className="dot brass" /> aperçu de chaque scénario · clique pour l'ouvrir</span>
+              </div>
+              <div className="dash-plans">
+                {planPreviews.map(({ plan, points, events }) => {
+                  const end = points[points.length - 1];
+                  return (
+                    <motion.div
+                      key={plan.id}
+                      className="card dash-plan"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openPlan(plan.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPlan(plan.id); } }}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.36 }}
+                    >
+                      <div className="dash-plan-head">
+                        <span className="dash-plan-name">{plan.name}</span>
+                        {plan.id === state.activePlanId && <span className="tag tag-brass txt-brass">actif</span>}
+                        <span className="spacer" />
+                        <span className="dash-plan-end">{money(end.netWorth)} <em>en {end.year}</em></span>
+                      </div>
+                      <NetWorthChart points={points} events={events} milestones={plan.milestones} mode="net" />
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </>
       )}
     </>

@@ -65,7 +65,13 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
   const yTicks = 4;
   const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => domainMin + ((domainMax - domainMin) * i) / yTicks);
   const xStep = Math.max(1, Math.ceil((n - 1) / 8));
-  const xTickIdx = points.map((_, i) => i).filter((i) => i % xStep === 0 || i === n - 1);
+  // ticks réguliers + TOUJOURS la dernière année, mais on retire le tick régulier s'il est
+  // trop proche de la fin (sinon les 2 labels se chevauchent, ex. « 20612062 »).
+  const xTickIdx = points.map((_, i) => i).filter((i) => i % xStep === 0);
+  if ((n - 1) % xStep !== 0) {
+    if (n - 1 - xTickIdx[xTickIdx.length - 1] < Math.ceil(xStep / 2)) xTickIdx.pop();
+    xTickIdx.push(n - 1);
+  }
 
   // jalons visibles sur l'horizon, GROUPÉS par année (plusieurs jalons la même
   // année partagent la ligne : leurs libellés sont empilés au lieu de se superposer)
@@ -96,6 +102,12 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
   };
 
   const hp = hover !== null ? points[hover] : null;
+
+  // marqueurs de l'année survolée (jalons ◇ + événements ⚑/✓/◆) → 2e tooltip (pastille)
+  const hoverMarkers = hover === null ? [] : [
+    ...(msByIdx.get(hover) ?? []).map((m) => ({ glyph: "◇", color: "var(--sage)", label: m.label || "Jalon" })),
+    ...(marksByYear.get(hover) ?? []).map((e) => ({ glyph: MARK_GLYPHS[e.kind], color: MARK_COLORS[e.kind], label: e.label })),
+  ];
 
   return (
     <div className="chart-wrap" ref={wrapRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
@@ -196,11 +208,25 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
         })}
       </svg>
 
+      {/* pile de tooltips : pastilles jalons/événements EMPILÉES juste au-dessus du
+          tooltip de valeur, l'ensemble remontant au-dessus du point survolé */}
       {hp && (
-        <div className="chart-tip" style={{ left: `${(x(hp.yearIndex) / W) * 100}%`, top: `${(y(hp.netWorth) / H) * 100}%` }}>
-          <div className="chart-tip-year">{hp.year}{hp.age !== null ? ` · ${hp.age} ans` : ""}</div>
-          <div className="chart-tip-val">{money(hp.netWorth)}</div>
-          <div className="chart-tip-sub">actifs {compactEur(hp.grossAssets)} · dettes {compactEur(hp.debt)}</div>
+        <div className="chart-tip-stack" style={{ left: `${(x(hp.yearIndex) / W) * 100}%`, top: `${(y(hp.netWorth) / H) * 100}%` }}>
+          {hoverMarkers.length > 0 && (
+            <div className="chart-markers-tip">
+              {hoverMarkers.map((m, i) => (
+                <div className="chart-marker-row" key={i}>
+                  <span className="chart-marker-badge" style={{ color: m.color, borderColor: m.color }}>{m.glyph}</span>
+                  <span className="chart-marker-label">{m.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="chart-tip">
+            <div className="chart-tip-year">{hp.year}{hp.age !== null ? ` · ${hp.age} ans` : ""}</div>
+            <div className="chart-tip-val">{money(hp.netWorth)}</div>
+            <div className="chart-tip-sub">actifs {compactEur(hp.grossAssets)} · dettes {compactEur(hp.debt)}</div>
+          </div>
         </div>
       )}
     </div>

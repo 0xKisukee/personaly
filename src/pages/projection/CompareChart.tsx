@@ -31,7 +31,11 @@ export default function CompareChart({ series }: { series: { name: string; point
   const yTicks = 4;
   const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => domainMin + ((domainMax - domainMin) * i) / yTicks);
   const xStep = Math.max(1, Math.ceil((n - 1) / 8));
-  const xTickIdx = pts0.map((_, i) => i).filter((i) => i % xStep === 0 || i === n - 1);
+  const xTickIdx = pts0.map((_, i) => i).filter((i) => i % xStep === 0);
+  if ((n - 1) % xStep !== 0) {
+    if (n - 1 - xTickIdx[xTickIdx.length - 1] < Math.ceil(xStep / 2)) xTickIdx.pop();
+    xTickIdx.push(n - 1);
+  }
 
   const onMove = (e: React.MouseEvent) => {
     const el = wrapRef.current;

@@ -1,58 +1,36 @@
 # personaly
 
-Application de **projection financière et de suivi de patrimoine** personnelle.
-Objectif : modéliser avec précision l'évolution du patrimoine net dans le temps —
-revenus de tout type, croissance des actifs, dettes, dépenses — pour simuler sa
-situation sur plusieurs années.
+Application **locale** de suivi de patrimoine et de **projection financière** (FR).
+Objectif : modéliser finement l'évolution du patrimoine net dans le temps — actifs,
+passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 
-> 100 % local : aucune base de données, aucun compte, aucune auth.
-> Tout est stocké dans le `localStorage` du navigateur.
+> **100 % local** : aucun compte, aucun backend. Tout vit dans le `localStorage`
+> (`personaly:v1`). Aucune donnée ne quitte le navigateur. Export / import JSON.
 
 ---
 
-## Stack technique
+## Stack & principes
 
-- **Vite** + **React 19** + **TypeScript**
-- **motion** (anciennement framer-motion) pour les animations
-- Pas de routeur (navigation par état local), pas de lib UI, pas de lib de graphiques
-  (tout en **SVG maison**), pas de backend
-- Persistance : `localStorage` (clé `personaly:v1`)
-
-### Lancer le projet
+- **Vite** + **React 19** + **TypeScript**.
+- **react-router-dom** (`BrowserRouter`) — URLs réelles, deep-link, back/forward.
+- **motion** pour les animations (enveloppé dans `<MotionConfig reducedMotion="user">`).
+- **Aucune** lib de graphes : tout est en **SVG maison**. Pas de lib UI (design system maison).
+- **Thème sombre uniquement** ; feuille `@media print` pour un export papier propre.
 
 ```bash
-npm install
-npm run dev      # serveur de dev
-npm run build    # tsc -b + build de prod (à lancer pour vérifier les types)
-npm run preview  # prévisualiser le build
-npm test         # vitest — À LANCER APRÈS TOUTE MODIF DU MOTEUR (src/lib/*.test.ts)
+npm run dev       # dev
+npm run build     # tsc -b && vite build  (VÉRIFIE LES TYPES — à lancer après changement)
+npm test          # vitest run  (À LANCER APRÈS TOUTE MODIF DU MOTEUR/MODÈLE)
+npm run preview   # prévisualiser le build
 ```
 
-Les tests (6 fichiers, ~110 cas) couvrent le moteur de projection et ses **invariants
-structurels** (voir `src/lib/projection.test.ts`) : colonne patrimoine de la modale =
-patrimoine net, pont « début + enrichissement = début suivant », sous-lignes qui somment
-aux agrégats, neutralité des transferts (cascade de surplus **et de retrait**, versements,
-achats/ventes), plafonds de versements, événements (les 6 types + ordre + désactivation),
-**jalons** (dates relatives, offsets, jalon supprimé), inflation/euros constants, 1re année
-partielle. `montecarlo.test.ts` couvre les générateurs seedés et le taux de succès ;
-`store.test.ts` couvre les **migrations** du localStorage. Le temps y est figé (fake timers).
-
----
-
-## Aesthetic / design system
-
-Thème **« maison de patrimoine »** : encre vert-forêt profonde, accents **laiton**,
-texte ivoire. Tout le style est dans un **seul fichier** : [`src/index.css`](src/index.css)
-(tokens, atomes, layout, pages — pas de CSS séparé par page).
-
-- **Polices** (chargées dans [`index.html`](index.html) via Google Fonts) :
-  - `Fraunces` — titres éditoriaux (serif à fort contraste)
-  - `Hanken Grotesk` — UI / texte courant
-  - `Spline Sans Mono` — tous les chiffres (tabulaires)
-- **Couleurs** (variables CSS dans `:root`) : `--brass` (laiton), `--sage` (vert
-  végétal), `--gain` (vert flux entrant), `--drain` (terracotta flux sortant),
-  `--ink*` (échelle d'ivoire).
-- Animations : reveals échelonnés au chargement, transitions de page (`AnimatePresence`).
+**Tests** (`src/lib/*.test.ts`, ~130 cas, temps figé) : moteur de projection + ses
+**invariants** (patrimoine début + enrichissement = début suivant ; sous-lignes qui somment
+aux agrégats ; neutralité des transferts : cascades surplus/retrait, versements, achats/ventes ;
+plafonds ; 6 événements ; jalons/dates relatives ; inflation/euros constants ; 1re année
+partielle), Monte Carlo (générateurs seedés + taux de succès), **migrations** localStorage
+(`store.test.ts`), **taxonomie d'actifs** (`assets.test.ts`, dont l'invariant « bloc UI
+versements ⇔ `DEPOSIT_ELIGIBLE` »).
 
 ---
 
@@ -60,380 +38,250 @@ texte ivoire. Tout le style est dans un **seul fichier** : [`src/index.css`](src
 
 ```
 src/
-├── main.tsx                 # entrée React, importe index.css
-├── App.tsx                  # provider + "routeur" (état local) + transitions de page
-├── index.css                # TOUT le design system
-├── lib/
-│   ├── types.ts             # modèle de données (source de vérité)
-│   ├── store.tsx            # contexte React + persistance + MIGRATIONS localStorage
-│   ├── format.ts            # money(), percent(), périodes, âge, whenLabel(), uid()
-│   ├── finance.ts           # amortissement : mensualité, split intérêts/capital, durée
-│   ├── selectors.ts         # tous les calculs dérivés (patrimoine + flux, sur l'état réel)
-│   ├── projection.ts        # moteur de projection mois par mois (déterministe + stochastique)
-│   └── montecarlo.ts        # Monte Carlo : rejoue le moteur N fois, bandes P10–P90, succès
-├── components/
-│   ├── Sidebar.tsx          # nav + ROUTES + LISTE DES PLANS + patrimoine net
-│   ├── PageHeader.tsx       # en-tête de page (eyebrow + titre + lede + actions)
-│   ├── Modal.tsx            # modale générique animée
-│   ├── WhenPicker.tsx       # sélecteur de date : année précise OU jalon ± n années
-│   ├── MilestonesEditor.tsx # éditeur de jalons d'un plan (utilisé dans Projection)
-│   ├── SankeyChart.tsx      # diagramme de flux (cash-flow d'une année) — SVG maison
-│   └── icons.tsx            # icônes SVG inline (pas de dépendance)
+├── main.tsx            # entrée React ; importe styles/*.css DANS L'ORDRE (= cascade, ne pas réordonner)
+├── App.tsx             # StoreProvider > MotionConfig > BrowserRouter > Shell ; titre par route
+├── routes.tsx          # table de routes + slugs des sous-vues Projection
+├── lib/                # modèle & logique PURE (testée)
+│   ├── types.ts        # modèle = source de vérité (AppState, Asset, Plan, SimState…)
+│   ├── store.tsx       # contexte React + persistance + MIGRATIONS + export/import
+│   ├── assets.ts       # REGISTRE des types d'actifs (méta, presets, familles, normalizeAsset)
+│   ├── selectors.ts    # calculs dérivés (patrimoine, flux, comptabilité, assetPerformance)
+│   ├── projection.ts   # MOTEUR mois par mois (déterministe + stochastique)
+│   ├── montecarlo.ts   # Monte Carlo (bandes P10–P90, taux de succès)
+│   ├── finance.ts      # amortissement (mensualité, split intérêts/capital)
+│   └── format.ts       # money(), percent(), périodes, âge, whenLabel(), uid()
+├── ui/                 # PRIMITIVES du design system (enrobent les classes CSS)
+│   └── Button Input Field Select Segment Card Tag MoneyInput Donut PerformanceBadge(+perfColor)
+├── components/         # composants transverses
+│   ├── Modal.tsx       # modale générique : PORTAIL vers <body>, focus-trap, verrou de scroll, Escape
+│   ├── Sidebar.tsx     # nav (00→03) + liste des PLANS + patrimoine net + accès Paramètres
+│   ├── SettingsModal.tsx  # Paramètres : nom, date de naissance, inflation par défaut
+│   ├── PageHeader WhenPicker MilestonesEditor SankeyChart icons
 └── pages/
-    ├── ProfilPage.tsx       # 01 — Profil (identité seule)
-    ├── PatrimoinePage.tsx   # 02 — Patrimoine (actifs + passifs)
-    ├── FluxPage.tsx         # 03 — Flux (entrants/sortants)
-    ├── ProjectionPage.tsx   # 04 — Projection : ORCHESTRATEUR (état, moteur, navigation, modales)
-    └── projection/          # 04 — les 4 vues + leurs composants, un fichier par responsabilité
-        ├── ProjectionView.tsx   # vue Projection (hypothèses, hero, graphe, table)
-        ├── EventsView.tsx       # vue Jalons & Événements (liste)
-        ├── CashflowView.tsx     # vue Cash-flow (habille SankeyChart)
-        ├── MonteCarloView.tsx   # vue Probabilité (jauge + FanChart)
-        ├── NetWorthChart.tsx    # graphe patrimoine net / composition (SVG maison)
-        ├── CompareChart.tsx     # graphe mode « Plans » (SVG maison)
-        ├── CascadeEditor.tsx    # éditeur de cascade surplus / retrait
-        ├── EventModal.tsx       # modale création/édition d'un événement (6 types)
-        ├── YearDetailModal.tsx  # modale composition d'une année
-        ├── eventHelpers.ts      # logique métier des événements (switchKind, résumés, listes)
-        └── chartUtils.ts        # maths + formatage partagés des graphes
+    ├── DashboardPage.tsx   # 00 — Accueil (vue d'ensemble)
+    ├── PatrimoinePage.tsx  # 01 — Patrimoine (actifs + passifs)
+    ├── FluxPage.tsx        # 02 — Flux (entrants/sortants)
+    ├── ProjectionPage.tsx  # 03 — Projection : ORCHESTRATEUR (état, moteur, navigation, modales)
+    └── projection/         # les 4 vues + graphes SVG + modales (un fichier par responsabilité)
+        └── ProjectionView EventsView CashflowView MonteCarloView
+            NetWorthChart CompareChart CascadeEditor EventModal YearDetailModal
+            eventHelpers.ts chartUtils.ts
 ```
 
-> La page **ProjectionPage.tsx** ne fait que composer l'entrée du moteur, lancer la
-> projection une fois et distribuer les résultats aux vues (données descendantes,
-> callbacks remontants). Chaque vue/composant de `projection/` est autonome et testable
-> isolément — ajouter une vue = un fichier + un onglet dans `VIEWS`.
-
-La navigation est un simple `useState<RouteId>` dans `App.tsx`. Les `ROUTES`
-sont définies dans `Sidebar.tsx`.
+`styles/` est éclaté en `tokens.css` (variables) → `base.css` (reset, a11y, print) →
+`primitives.css` (atomes + classes utilitaires `.txt-*`) → `layout.css` → `charts.css`.
+`main.tsx` les importe **dans cet ordre** (la cascade en dépend).
 
 ### Finances courantes vs Plans (distinction structurante)
 
-Comme ProjectionLab, l'app sépare **l'état réel** des **simulations** :
+- **Finances courantes** (`profile`, `assets`, `liabilities`, `incomes`, `expenses`) =
+  la réalité d'aujourd'hui, **source de vérité unique**, éditée dans Patrimoine / Flux.
+  Une simulation ne les modifie **jamais**.
+- **Plans** (`state.plans[]`, actif = `activePlanId`) = des couches **hypothétiques**
+  posées dessus : chacune a **ses** jalons, **ses** événements, **ses** hypothèses. Sélection /
+  création dans la sidebar (« Nouveau plan » = duplication du plan actif).
 
-- **Finances courantes** (racine de `AppState` : `profile`, `assets`, `liabilities`,
-  `incomes`, `expenses`) = la vérité d'aujourd'hui, **source de vérité unique**. Éditées
-  dans Profil / Patrimoine / Flux. Une simulation ne les modifie **jamais**.
-- **Plans** (`state.plans: Plan[]`, actif = `state.activePlanId`) = des couches de
-  simulation posées dessus. Chaque plan a **ses** jalons, **ses** événements et **ses**
-  hypothèses (`ProjectionParams`). Sélection + création dans la **sidebar** (« Nouveau
-  plan » = duplication du plan actif). « Plan retraite à 60 » vs « à 64 » côte à côte.
-
-Le moteur ne connaît ni plans ni finances courantes : il reçoit un **instantané composé**
-`SimState` via `simInput(state, plan)` (finances courantes + jalons/événements du plan).
+Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `SimState` via
+`simInput(state, plan)`.
 
 ---
 
-## Modèle de données
-
-Voir [`src/lib/types.ts`](src/lib/types.ts) pour la source de vérité. Résumé :
+## Modèle de données (`src/lib/types.ts` = source de vérité)
 
 ```ts
-AppState = {                        // === FINANCES COURANTES (réalité) ===
-  profile:     { firstName, birthDate }
-  assets:      Asset[]
-  liabilities: Liability[]
-  incomes:     IncomeItem[]         // revenus complémentaires (FLUX)
-  expenses:    ExpenseItem[]        // dépenses & impôts (FLUX)
-  plans:       Plan[]               // === SIMULATIONS (couches virtuelles) ===
-  activePlanId: string
+AppState = {
+  profile:   { firstName, birthDate }
+  settings:  { defaultInflation, horizon }   // GLOBAUX (voir « horizon global » plus bas)
+  assets, liabilities, incomes, expenses     // FINANCES COURANTES
+  plans: Plan[], activePlanId                // SIMULATIONS
 }
-
-Plan = {
-  id, name
-  milestones:  Milestone[]          // jalons de vie du plan (année nommée)
-  events:      PlannedEvent[]       // événements datés du plan
-  projection:  ProjectionParams     // hypothèses du plan (persistées)
-}
-
-// Entrée du moteur = finances courantes + couche du plan, composée par simInput()
-SimState = { profile, milestones, assets, liabilities, incomes, expenses, events }
+Plan = { id, name, milestones[], events[], projection: ProjectionParams }
+SimState = simInput(state, plan)             // entrée du moteur
 ```
 
-### Milestone (jalon) — dates relatives
+### Actif — DEUX mécanismes de gain indépendants (la distinction centrale)
 
-Un jalon est une **année nommée** propre à un plan (`{ id, label, year }`) : Retraite,
-Achat maison, Départ des enfants… Les flux et événements peuvent **s'ancrer** dessus via
-un `MilestoneRef { milestoneId, offset? }` (± n années) au lieu d'une année en dur :
-déplacer le jalon **recale tout d'un coup** ce qui s'y accroche. L'ancrage **prime** sur
-l'année en dur, qui reste comme **instantané de secours** si le jalon est supprimé (rien
-ne casse, un warning est émis). Résolution : `refYear()`, `eventYear()`, `flowBounds()`
-(types.ts) ; libellé humain : `whenLabel()` (format.ts, ex. `« Retraite +2 (2059) »`).
-Un plan dupliqué copie ses jalons avec les **mêmes ids** — les ancrages continuent de
-résoudre dans la copie.
+1. **Croissance de la valeur** (`growthRate`, %/an) — **CAPITALISÉE** : le gain reste dans
+   l'actif, se compose, ne verse rien (PEA +7, immo +2, voiture −15). C'est une **plus/moins-value
+   latente** ; n'alimente pas le cashflow.
+2. **Revenu distribué** (`incomeMode`: `none`/`rate`/`amount`) — **PERÇU EN CASH** (loyer,
+   dividende) : alimente les flux entrants, à plat, ne se compose pas.
 
-### Asset (actif) — deux mécanismes de gain INDÉPENDANTS
+Un actif peut cumuler les deux (immo `rented` : valeur qui monte **et** loyer). Autres champs :
+`charges`, `valueFloor`, `volatility` (Monte Carlo **uniquement**), `depositCap`/`depositsMade`
+(versements du surplus). **Registre `lib/assets.ts`** = source unique par catégorie :
 
-C'est **la** distinction centrale du modèle :
+- Catégories : `immobilier` (+ flag `rented`), `epargne` (livrets **et** placements fusionnés),
+  `liquidites`, `vehicule`, `autre`. Chaque type porte : libellé, icône, **accent d'identité
+  (neutre)**, blocs de formulaire affichés, **presets** (Livret A, PEA, RP, Locatif…),
+  `defaultVolatility`.
+- **Familles** (regroupement de la liste) : Immobilier / Épargne & liquidités / Autres.
+- `normalizeAsset(a)` (appliqué à l'enregistrement) coupe les champs qu'une catégorie n'expose
+  pas → pas de « loyer fantôme » sur un bien non loué.
+- **`DEPOSIT_ELIGIBLE = ["epargne"]`** : seule l'épargne reçoit le surplus de la projection.
+  Invariant testé : `hasField(cat,"deposits")` ⇔ `canReceiveDeposits`.
 
-1. **Croissance de la valeur** (`growthRate`, %/an) — **CAPITALISÉE**.
-   Le gain reste dans l'actif, sa valeur grossit et **se compose** dans la
-   projection. Positif (PEA +6, immo +2) ou négatif (voiture −15).
-   → N'alimente PAS le cashflow. C'est une **plus-value/moins-value latente**.
+### Passif — emprunt amortissable
 
-2. **Revenu distribué** (`incomeMode`: `none` | `rate` | `amount`) — **PERÇU EN CASH**.
-   Le gain sort de l'actif (loyer, dividende) et alimente les flux entrants ;
-   il **ne se compose pas** dans l'actif (la valeur ne bouge pas de ce fait).
-   Dans la projection : le mode `rate` suit la valeur de l'actif (donc croît si
-   l'actif s'apprécie), le mode `amount` est indexé sur l'inflation si
-   `indexIncomes` est actif.
+`emprunt_immo` | `credit` | `autre`. `outstanding` réduit le net ; mensualité **calculée**
+depuis capital + taux + durée (`finance.ts`) ou saisie (`autoPayment:false`). **Les crédits
+sont indépendants des biens** (pas de couplage modèle).
 
-Un même actif peut cumuler les deux (appartement loué : +2 %/an de valeur ET un loyer).
+### Flux (`incomes`/`expenses`)
 
-**Versements (projection)** : les actifs d'`epargne` (voir `canReceiveDeposits()`)
-peuvent recevoir le **surplus d'épargne** de la
-projection. `depositCap` = plafond de **dépôts cumulés** (ex. 150 000 € pour un PEA),
-`depositsMade` = versements déjà effectués. Le plafond porte sur les dépôts, pas sur la
-valeur : la croissance peut le dépasser, seuls les versements s'arrêtent.
+Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense** manuelle
+(catégorie `impot`) — pas de moteur fiscal. Bornes `startYear`/`endYear` **ou** ancrage jalon
+`startRef`/`endRef` (prioritaire). `growth` propre au flux (sinon suit l'inflation si indexé).
 
-**Volatilité (`volatility`, %/an)** : écart-type annuel du rendement, utilisé
-**uniquement** par le Monte Carlo (onglet Probabilité). La projection déterministe garde
-`growthRate` sec. Absent/0 = rendement certain.
+### Jalons & événements (par plan)
 
-### Liability (passif) — emprunt amortissable
-
-`outstanding` (capital restant dû) réduit le patrimoine net. Pour un emprunt :
-`rate`, `termMonths` (durée restante → date de fin), `monthlyPayment`
-(**calculée automatiquement** depuis capital + taux + durée, ou saisie si
-`autoPayment = false`). Voir `monthlyPayment()` dans `finance.ts`.
-
-### PlannedEvent — événements datés, ATOMIQUES et COMPOSABLES
-
-Six types (`kind`), datés à l'**année** — soit en dur (`year`) soit **ancrés sur un
-jalon** (`when: MilestoneRef`, prioritaire) — appliqués au 1er mois, avant les flux :
-`buy` (achat d'actif payé cash, avec `fees` sortie sèche — l'actif embarqué est un
-`Asset` complet : croissance, revenu, charges…), `sell` (produit → épargne ; prix
-fixé optionnel, sinon valeur projetée), `loan` (nouvel emprunt : capital → épargne,
-mensualité calculée), `cash` (rentrée/sortie ponctuelle), `repay` (remboursement
-anticipé), `deposit` (versement épargne → actif éligible, transfert neutre — la
-capacité de plafond est PARTAGÉE avec la cascade du surplus, `capLeftByAsset`).
-**Les crédits sont indépendants des biens, comme sur la page
-Patrimoine** : un achat financé = `loan` + `buy` la même année ; une vente avec
-crédit en cours = `sell` + `repay`. Ordre d'application dans une année : le cash
-entre d'abord (sell → cash → loan) puis sort (repay → buy). Chaque événement a une
-case à cocher (`disabled`) pour l'exclure/réinclure de la projection sans le supprimer.
-
-**« Et si ? »** : il n'y a **pas de scénarios** (retirés — voir décisions). Pour comparer
-des variantes, on joue à deux niveaux : décocher un événement (`disabled`) au sein d'un
-plan, ou **dupliquer le plan** et comparer les trajectoires via le mode **Plans** du
-graphe. Un plan est plus lourd qu'un ancien scénario (copie complète, indépendante) mais
-plus lisible : pas de niveau de variante caché.
-
-**Comptabilité** : tous ces événements sont des transferts **neutres** pour le
-patrimoine net, SAUF les frais (`eventFees`, sortie sèche), l'écart prix de vente
-fixé − valeur projetée (`eventGain`, PV réalisée) et les rentrées/sorties
-(`eventCash`). Ces trois termes entrent dans l'enrichissement pour préserver
-l'identité « patrimoine début + enrichissement = début suivant » (testée). Si un
-événement rend l'épargne négative ou est inapplicable (actif déjà vendu…), le
-moteur émet un **warning** affiché en bannière — jamais d'annulation silencieuse.
-
-### IncomeItem / ExpenseItem (FLUX)
-
-Saisis manuellement, mensuel ou annuel (`period`). Les revenus sont **nets avant
-impôt**. L'impôt n'est PAS calculé par un moteur : c'est une **dépense** de
-catégorie `impot` que l'utilisateur ajoute lui-même (décision explicite).
-
-**Bornes ancrables** : `startYear`/`endYear` (années en dur) OU `startRef`/`endRef`
-(ancrage jalon, prioritaire). Ex. salaire jusqu'à la Retraite, pension à partir de
-Retraite +1. Résolu par `flowBounds()` avec les jalons du **plan actif** ; libellé par
-`whenLabel()`. Chaque flux garde aussi un taux de revalorisation propre `growth` (sinon
-suit l'inflation globale si l'indexation est active).
+- **Milestone** = année nommée (`{id,label,year}`, ex. Retraite). Les flux/événements s'y
+  **ancrent** via `MilestoneRef{milestoneId, offset?}` : déplacer le jalon recale tout. L'année
+  en dur survit comme secours si le jalon disparaît (`refYear`/`eventYear`/`flowBounds`).
+- **PlannedEvent** = 6 types datés (ou ancrés) : `buy` `sell` `loan` `cash` `repay` `deposit`.
+  **Atomiques** (un achat financé = `loan` + `buy` la même année). Transferts **neutres** pour
+  le net, sauf frais (`eventFees`), plus-value réalisée (`eventGain`) et rentrées/sorties
+  (`eventCash`). `disabled` exclut sans supprimer. Un cas inapplicable → **warning** (jamais
+  d'annulation silencieuse).
 
 ---
 
-## Les pages
+## Moteur (`lib/projection.ts`)
 
-### 01 — Profil
-Prénom + date de naissance (âge calculé). Socle des finances courantes. Les **jalons**
-de vie ne sont plus ici : ils sont propres à chaque plan et s'éditent dans l'onglet
-**Événements** de la page Projection.
+`project(SimState, params)` simule **mois par mois** sur `horizon` ans → `points[]` annuels.
+- Actifs `growthRate≠0` **composés** (mensuellement) ; emprunts **amortis** et éteints à terme
+  (la mensualité libérée gonfle l'épargne).
+- Épargne cumulée **réinvestie** à `savingsYield`.
+- **Cascade de surplus** (`surplusTargets[]`, ordonné) : le surplus remplit le 1er actif éligible
+  jusqu'à son plafond, l'excédent passe au suivant. **Cascade de retrait** (`withdrawalTargets[]`,
+  miroir) : en déficit, on puise dans ces actifs avant de peser sur l'épargne (décumulation retraite).
+- **Indépendance financière** = seuil **saisi** (`fiTarget`), pas déduit ; le moteur marque la 1re
+  année où le net l'atteint.
+- Hypothèses (persistées dans `plan.projection`) : `savingsYield`, `inflation`, indexation
+  revenus/dépenses, `realTerms` (euros constants). **Monte Carlo** (`montecarlo.ts`) rejoue ~400×
+  en bruitant la croissance selon `volatility` (seedé) → bandes P10–P90 + taux de succès.
+- La 1re année ne couvre que les **mois restants** de l'année civile.
 
-### 02 — Patrimoine
-- **Hero** : Patrimoine net = Brut − Passifs.
-- **Actifs** : catégories (immobilier, épargne & placements, liquidités, véhicule,
-  autre). Modale avec les deux blocs distincts *Croissance capitalisée* et
-  *Revenu distribué*.
-- **Passifs** : emprunts (taux, durée, mensualité auto) et dettes simples.
+### Les 4 vues de Projection (`pages/projection/`)
 
-### 03 — Flux
-Visualise ce qui fait varier le patrimoine net, en **mensuel ou annuel** (bascule).
+La page `ProjectionPage` orchestre (compose l'entrée, lance le moteur **une fois**, distribue),
+avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par l'URL (`/projection/:vue`) :
 
-**Comptabilité (rigoureuse) :**
-
-```
-ΔPatrimoine net = revenus encaissés          (cash entrant)
-                + plus-value latente          (croissance capitalisée, actifs qui montent)
-                − dépenses & impôts           (cash sortant)
-                − intérêts d'emprunt          (vrai coût)
-                − moins-value latente         (dépréciation, actifs qui baissent)
-```
-
-Deux décisions clés encodées ici :
-
-- **La croissance capitalisée EST une évolution de patrimoine** et apparaît dans
-  les flux (entrants si appréciation, sortants si dépréciation), taguée `latent`
-  (≠ `encaissé`). On distingue *encaissé/réalisé* de *latent* (et non
-  liquide/illiquide : un Livret A est liquide mais sa croissance n'est pas un
-  revenu encaissé).
-
-- **Le capital remboursé d'un emprunt n'est NI un coût NI un gain** : seuls les
-  **intérêts** sont un flux sortant. Le capital sort de la trésorerie mais revient
-  en patrimoine (la dette baisse d'autant) → il s'annule. Le split intérêts/capital
-  est calculé par amortissement réel sur 12 mois (`loanYearSplit()`).
-
-**Sous-groupes :**
-- Entrants : *Revenus du patrimoine* (auto) · *Revenus complémentaires* (manuel) · *Plus-value latente* (auto)
-- Sortants : *Dépenses & impôts* (manuel) · *Intérêts d'emprunt* (auto) · *Moins-value latente* (auto)
-
-Sous le hero, une bande décompose l'enrichissement en **Réalisé (encaissé) + Latent**.
-
-### 04 — Projection
-La page opère toujours sur le **plan actif** (barre en haut : renommer / dupliquer /
-supprimer le plan). Elle est découpée en **4 vues** :
-
-**Projection** — Simulation **mois par mois** sur un horizon réglable (10/20/30/40 ans) —
-moteur dans [`src/lib/projection.ts`](src/lib/projection.ts).
-- Les actifs à `growthRate` ≠ 0 **se composent** (intérêts composés, appliqués mensuellement).
-- Les emprunts sont **amortis échéance par échéance** et **s'éteignent** à leur terme
-  (`termMonths`) ou quand le capital est remboursé → la mensualité libérée gonfle l'épargne.
-- Le cash net réalisé s'accumule en **épargne cumulée**, **réinvestie** au taux
-  `savingsYield` (composée).
-- **Affectation du surplus en cascade** (`surplusTargets: string[]`, ordonné) : le
-  surplus mensuel est versé dans le 1er actif éligible (PEA, livret…) jusqu'à son
-  **plafond de versements**, l'excédent passe au 2e, etc. — chaque dépôt se compose
-  ensuite au `growthRate` de l'actif. Ce qui reste après la cascade, et les **déficits**
-  (si pas de cascade de retrait), sont portés par l'épargne.
-- **Cascade de retrait / décumulation** (`withdrawalTargets: string[]`, MIROIR du
-  surplus) : quand l'épargne devient négative, on **puise** dans ces actifs dans l'ordre
-  (transfert neutre actif → épargne) avant de laisser le déficit sur l'épargne.
-  Indispensable pour projeter une **retraite** (phase de décumulation). Vide = comportement
-  historique (déficit porté par l'épargne, qui peut passer en négatif).
-- **Hypothèses** paramétrables (persistées dans `plan.projection`) : rendement de
-  l'épargne, **inflation**, indexation des revenus/dépenses, affichage en
-  **euros constants** (réel) ou courants (nominal).
-- **Indépendance financière** : seuil de patrimoine net **défini par l'utilisateur**
-  (`fiTarget`), PAS déduit par le moteur. Le moteur marque la première année où le
-  patrimoine net projeté atteint le seuil (évalué après conversion en euros constants).
-- **Graphe SVG maison**, modes **patrimoine net** (aire) · **composition** (actifs/épargne/
-  dettes empilés) · **Plans** (une courbe de patrimoine net par plan, quand >1 plan).
-  Survol, **jalons** (repères ◇ nommés), **marqueurs cliquables** (⚑ événement → ouvre
-  l'éditeur, ✓ fin d'emprunt, ◆ indépendance financière) avec légende des glyphes.
-- **Table annuelle** cliquable → **détail d'une année** (modale de composition : patrimoine
-  début d'année + décomposition des flux, chaque agrégat dépliable en sous-lignes).
-
-**Événements** — éditeur des **jalons du plan** (`MilestonesEditor`, avec suggestions
-Retraite / Espérance de vie d'après l'âge) puis la liste des événements datés (les 6 types,
-via `WhenPicker` : année précise ou jalon ± n).
-
-**Cash-flow** — diagramme de **Sankey** (`SankeyChart`, SVG maison) du cash-flow d'une
-année (slider pour choisir l'année) : sources → trésorerie → affectations. L'**épargne**
-est le poste d'équilibre (surplus « vers l'épargne », déficit « puisé dans l'épargne » ou
-couvert par les retraits d'actifs). Capital remboursé et versements = transferts neutres.
-
-**Probabilité** — **Monte Carlo** (`src/lib/montecarlo.ts`) : rejoue le moteur ~400 fois en
-bruitant la croissance mensuelle de chaque actif selon sa `volatility` (rendement mensuel
-~ N(μ, σ/√12), générateur **seedé** → reproductible). Affiche une **jauge de taux de succès**
-(part des tirages où l'épargne ne tombe jamais à sec, cascade de retrait incluse) et un
-**graphe en éventail** (bandes de percentiles P10–P90 / P25–P75, médiane, + la trajectoire
-déterministe en pointillé). Bouton « appliquer des valeurs types » si aucun actif n'a de
-volatilité. Le moteur tourne en **mode light** (`opts.light`, pas de `detail`) pour la vitesse.
-
-La 1re année ne couvre que les **mois restants de l'année civile** (départ au mois courant).
+- **Projection** — hypothèses (panneau `.assum`), hero (net à l'horizon, évolution, CAGR), **graphe
+  SVG** en 3 modes (net / composition actifs·épargne·dettes / **Plans** : une courbe par plan) avec
+  jalons `◇`, marqueurs cliquables (`⚑` événement → édite, `✓` fin d'emprunt, `◆` FI) + légende ;
+  **table annuelle** → clic = modale **détail d'une année** (composition dépliable).
+- **Événements** — éditeur des jalons du plan (`MilestonesEditor`, suggestions Retraite/Espérance)
+  + liste des 6 événements (saisie via `WhenPicker` : année précise ou jalon ± n).
+- **Cash-flow** — **Sankey** (`SankeyChart`, SVG maison) d'une année : sources → trésorerie →
+  affectations ; l'épargne est le **poste d'équilibre** (surplus « vers l'épargne » / déficit « puisé »).
+- **Probabilité** — **Monte Carlo** : jauge de **taux de succès** + **éventail** de percentiles
+  (P10–P90 / P25–P75) + médiane + trajectoire déterministe en pointillé.
 
 ---
 
-## Décisions de conception déjà tranchées (ne pas re-débattre)
+## Design system
 
-- ❌ **Pas de moteur fiscal.** Revenus saisis nets avant impôt ; l'impôt est une
-  dépense manuelle. Volonté explicite : un moteur serait trop complexe et incomplet.
-- ❌ **Pas de sociétés.** La page SAS/SCI a été retirée (peut-être plus tard).
-- ✅ **Croissance capitalisée vs revenu distribué** : deux champs séparés par actif.
-- ✅ **encaissé vs latent** (terminologie), pas liquide/illiquide.
-- ✅ **Mensualité d'emprunt calculée** depuis capital + taux + durée.
-- ✅ **Capital remboursé exclu** des flux sortants (neutre pour le patrimoine).
-- ✅ **Saisie mensuelle OU annuelle** au choix, conversion automatique.
-- ✅ **Indépendance financière = seuil saisi par l'utilisateur** (`fiTarget`), pas une
-  heuristique de revenus passifs (essayée puis abandonnée : impossible de deviner quels
-  actifs l'utilisateur vendrait/garderait).
-- ❌ **Objectif daté retiré** (« X € en année Y » + bannière d'écart) : jugé peu utile,
-  redondant avec le seuil d'indépendance qui répond à la meilleure question (« quand
-  est-ce que j'atteins X ? »).
-- ✅ **Événements atomiques, crédits indépendants des biens** : pas d'emprunt embarqué
-  dans un achat ni de « solder l'emprunt » dans une vente — on compose des événements
-  simples la même année (cohérent avec le modèle Patrimoine).
-- ✅ **Finances courantes ≠ Plans** : l'état réel (patrimoine, flux) est unique et jamais
-  modifié par une simulation ; les « et si » vivent dans des **plans** (jalons + événements
-  + hypothèses par plan), comparés via le mode Plans du graphe.
-- ✅ **Jalons = dates relatives** : ancrer flux/événements sur un jalon (Retraite…) plutôt
-  qu'une année en dur ; déplacer le jalon recale toute la projection. L'année en dur
-  survit comme secours si le jalon disparaît.
-- ❌ **Scénarios retirés** (ils ne faisaient varier QUE les événements) : redondants avec
-  les plans (qui varient tout) + `disabled` par événement. Deux niveaux de variantes = trop
-  de charge cognitive. Migration : un événement anciennement tagué devient **désactivé**.
-- ✅ **Cascade de retrait** (décumulation) en miroir de la cascade de surplus : le déficit
-  puise dans les actifs choisis avant de peser sur l'épargne. Neutre pour le patrimoine.
-- ✅ **Monte Carlo optionnel** : la volatilité est par actif et n'affecte QUE l'onglet
-  Probabilité ; la projection principale reste **déterministe** (lisible, reproductible).
+- Thème **« maison de patrimoine »** sombre (thème unique) : encre vert-forêt, accents **laiton**,
+  texte ivoire.
+- **Polices** (chargées dans `index.html`) : **Fraunces** (titres serif éditoriaux), **Hanken
+  Grotesk** (UI/texte), **Spline Sans Mono** (tous les chiffres, tabulaires).
+- **Tokens** (`styles/tokens.css`) : `--brass` (laiton), `--sage` (vert végétal), `--gain`/`--drain`
+  (performance/flux), `--ink*` (échelle ivoire), `--cat-1..5` (palette catégorielle validée),
+  `--perf-*` (échelle de performance divergente), rayons/ombres/`--sidebar-w`.
+- Les **primitives `ui/*`** enrobent ces classes ; on construit les pages avec elles (pas de style
+  inline dispersé — voir Conventions).
 
 ---
 
-## Évolutions futures (feuille de route)
+## Concepts transverses (à connaître avant de toucher l'UI)
 
-### PROJECTION — déjà fait
-Réinvestissement de l'épargne (rendement composé), inflation + indexation + euros
-constants, indépendance financière, **charges par actif**, **assurance emprunteur**,
-**plancher de valeur**, **détail d'une année** (clic → composition patrimoine + flux),
-1re année partielle (mois restants), **cascade de surplus** (PEA → livret → … avec
-`depositCap`) et **cascade de retrait** (décumulation), **événements datés** (6 types,
-marqueurs ⚑ cliquables, alertes d'épargne négative), **jalons / dates relatives**
-(flux et événements ancrés sur Retraite… — recalage automatique), **plans multiples**
-(finances courantes vs simulations, comparaison inter-plans sur le graphe),
-**Monte Carlo** (bandes P10–P90 + taux de succès, volatilité par actif),
-**cash-flow en Sankey** par année.
-
-### PROJECTION — pistes restantes
-- Scénarios sur les **hypothèses** (pessimiste/médian/optimiste : taux de croissance
-  décalés) — le Monte Carlo couvre déjà l'incertitude, mais pas des jeux d'hypothèses nommés.
-- Récurrence d'événements (« changer de voiture tous les 8 ans ») et **modèles** d'événements
-  composés (achat immobilier financé = buy + loan pré-liés).
-- Horizon personnalisé au-delà des presets ; taux d'épargne requis pour atteindre le
-  patrimoine d'indépendance.
-
-### Pistes plus lointaines
-- Fiscalité **française** optionnelle (PFU 30 % hors enveloppe, exonération PEA > 5 ans,
-  abattements assurance-vie) — vrai différenciateur vs ProjectionLab (US-centré).
-- Retour éventuel des **sociétés** (SAS/SCI, quote-part des résultats).
-- Export / import des données (sauvegarde JSON), puisque tout est local.
-
----
-
-## Migrations du localStorage (`store.tsx`)
-
-Le chargement (`loadState()`) est **tolérant** et migre les anciens formats en place —
-tout se réécrit propre au prochain `setState`. Migrations actives :
-
-- **État plat → plans** : un ancien `AppState` sans `plans[]` voit ses
-  événements/jalons/hypothèses regroupés dans un « Plan principal » ; les finances
-  courantes restent à la racine.
-- **Scénarios supprimés** : un événement portant `scenario` devient **désactivé**
-  (`disabled: true`), la clé est purgée (la trajectoire de Base est inchangée : ces
-  événements en étaient déjà exclus). `projection.scenario` et `plan.scenarios` purgés.
-- **Clés d'actifs héritées** : `valuationRate` (ancien nom de `growthRate`) supprimée.
-- **Projection héritée** : `surplusTargetId` (cible unique) → `surplusTargets` (cascade) ;
-  `goalAmount` / `goalYear` (ancêtres de `fiTarget`) purgés.
-- **Garde-fous** : `activePlanId` invalide → 1er plan ; liste de plans vide → plan par défaut.
+- **Encaissé vs Latent** (comptabilité de la page Flux, rigoureuse) :
+  ```
+  ΔPatrimoine net = revenus encaissés  + plus-value latente   (croissance des actifs qui montent)
+                  − dépenses & impôts  − intérêts d'emprunt   − moins-value latente
+  ```
+  La croissance capitalisée EST une variation de patrimoine (taguée `latent`, ≠ `encaissé`) — on
+  distingue **réalisé/encaissé** de **latent**, pas liquide/illiquide (un Livret A est liquide mais
+  sa croissance n'est pas encaissée). Le **capital remboursé** n'est ni coût ni gain : il sort du
+  cash mais revient en net (la dette baisse d'autant) → exclu des flux sortants (seuls les
+  **intérêts** comptent ; split via `loanYearSplit()`). Sous-groupes Entrants : revenus du patrimoine
+  (auto) · complémentaires (manuel) · plus-value latente (auto) ; Sortants : dépenses & impôts · charges
+  d'actifs · intérêts d'emprunt · moins-value latente.
+- **Langage couleur de PERFORMANCE** : `assetPerformance(a)` = `growthRate` + revenu distribué
+  net / valeur. Échelle divergente drain→neutre→gain (`--perf-*`), rendue par `ui/PerformanceBadge`
+  (+ `perfColor`). ⚠️ **`--gain`/`--drain` = performance RÉELLE par actif** ; les accents de
+  catégorie/famille sont **neutres** (identité, pas un jugement). La **palette catégorielle**
+  `--cat-1..5` (camemberts, séries de plans) est **validée CVD** (script `validate_palette.js` de
+  la skill `dataviz`) et toujours accompagnée d'une **légende**.
+- **Accueil (Dashboard, `/`)** : ses modules de **base** (hero patrimoine, Répartition, Flux)
+  ne dépendent PAS d'un plan (finances courantes uniquement) ; en dessous, une section **Plans**
+  affiche **un aperçu par plan** — mini `NetWorthChart` (courbe + jalons) obtenu en projetant
+  chaque plan, clic → ouvre la Projection sur ce plan. **Horizon des aperçus = basé sur l'âge**
+  (jusqu'à 60/80/100/120 ans selon la tranche : <40→60, 40–60→80, 60–80→100, >80→120),
+  **indépendant** de `settings.horizon` (la timeframe de Projection) — défaut 40 ans si la date
+  de naissance est absente.
+- **Horizon GLOBAL** : l'horizon de projection vit dans `settings.horizon` (préférence de vue
+  partagée par tous les plans), fusionné à l'appel du moteur (`{...plan.projection, horizon:
+  settings.horizon}`). Le reste des hypothèses reste propre à chaque plan.
 
 ---
 
-## Où regarder en premier en reprenant
+## Conventions & pièges (NE PAS casser)
 
-1. [`src/lib/types.ts`](src/lib/types.ts) — le modèle et ses commentaires (les
-   décisions de modèle y sont documentées) : `AppState` (finances courantes) vs `Plan`
-   vs `SimState`, jalons/`MilestoneRef`, les 6 événements.
-2. [`src/lib/projection.ts`](src/lib/projection.ts) — le **moteur** mois par mois
-   (cascades, événements, jalons, mode stochastique) : le cœur, et le plus testé.
-3. [`src/lib/selectors.ts`](src/lib/selectors.ts) — la logique de calcul dérivée
-   (patrimoine + flux + comptabilité de l'enrichissement, sur l'état réel).
-4. [`src/lib/store.tsx`](src/lib/store.tsx) — persistance + **migrations** localStorage
-   (utile après tout changement de modèle).
-5. [`src/pages/ProjectionPage.tsx`](src/pages/ProjectionPage.tsx) — la page la plus riche
-   (4 vues), et [`src/pages/FluxPage.tsx`](src/pages/FluxPage.tsx) qui matérialise la comptabilité.
+- **Toutes les modales passent par `components/Modal`** : portail vers `<body>` (sinon un
+  ancêtre avec `backdrop-filter`/`transform` — ex. la sidebar — enferme le `position:fixed`),
+  focus-trap, verrou de scroll, `role="dialog"`, Escape.
+- **Perf de scroll (macOS) — 2 patterns bannis** : (1) `backdrop-filter` au-dessus d'un conteneur
+  qui scrolle → re-rasterisation par frame ; (2) `background-attachment: fixed` → repeint le fond
+  par frame. Utiliser un assombrissement opaque et un calque `body::before { position: fixed }`.
+- **Vue de projection conservée au changement de plan** : `Sidebar` ne navigue vers `/projection`
+  que si on n'y est pas déjà (la vue est portée par l'URL `/projection/:vue`).
+- **Styles inline sémantiques → classes utilitaires** (`.txt-gain/-drain/-sage/-brass/-faint/-soft`,
+  `.tag-brass`). Ne restent en inline que les valeurs **dynamiques** (couleur calculée, accent de
+  donnée).
+- **a11y** : `<MotionConfig reducedMotion="user">` + `@media (prefers-reduced-motion)` ;
+  `:focus-visible` global ; `role="dialog"` + focus-trap. **`@media print`** recolore toute l'app
+  (SVG compris) en surchargeant les **tokens** (sombre→clair) et masque nav/boutons. Export JSON
+  tagué `charset=utf-8` (anti-mojibake).
+- **Migrations tolérantes** (`store.tsx`, `loadState`/`migrateState`) : l'import passe par les
+  **mêmes garanties**, tout se réécrit propre au prochain `setState`. Migrations actives :
+  état **plat → plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios
+  retirés** (événement `scenario` → `disabled:true`, clé purgée) ; backfill `settings` (+ hissage
+  de `horizon` depuis le plan actif) ; remaps de catégories (`livret_epargne`/`placement`→`epargne`,
+  `compte_courant`→`liquidites`) ; purges héritées (`valuationRate`, `surplusTargetId`→`surplusTargets`,
+  `goalAmount`/`goalYear`→`fiTarget`) ; garde-fous (`activePlanId` invalide → 1er plan ; liste vide →
+  plan par défaut). **Après tout changement de modèle : ajouter/adapter une migration + un test.**
+
+---
+
+## Décisions déjà tranchées (ne pas re-débattre)
+
+Pas de moteur fiscal (impôt = dépense manuelle) · pas de sociétés (SAS/SCI retirées) ·
+croissance capitalisée ≠ revenu distribué (2 champs) · terminologie **encaissé vs latent** ·
+mensualité d'emprunt calculée · capital remboursé exclu des flux · saisie mensuelle **ou**
+annuelle · **FI = seuil saisi** (`fiTarget`), pas d'heuristique · objectif daté retiré ·
+événements **atomiques**, crédits indépendants des biens · **scénarios retirés** (remplacés par
+plans + `disabled`) · **cascade de retrait** (décumulation) miroir du surplus · Monte Carlo
+optionnel (la projection principale reste déterministe).
+
+---
+
+## Travaux futurs (reportés — à faire quand l'app sera jugée terminée)
+
+- **Onboarding** (wizard état vide → 1re projection) + **mode démo complet** (persona sandboxé,
+  backup/restore non destructif via `loadState`) + **visite guidée**. Reporté délibérément :
+  guider vers des écrans encore mouvants serait à refaire. Cadrage détaillé dans l'historique git.
+- Pistes moteur : scénarios d'hypothèses nommés, récurrence d'événements, fiscalité française
+  optionnelle (vrai différenciateur).
+
+---
+
+## Où regarder en premier
+
+1. `lib/types.ts` — le modèle et ses commentaires (décisions documentées).
+2. `lib/projection.ts` — le moteur mois par mois (le cœur, le plus testé).
+3. `lib/assets.ts` — le registre des types d'actifs (taxonomie, presets, familles).
+4. `lib/selectors.ts` — calculs dérivés (patrimoine, flux, `assetPerformance`).
+5. `lib/store.tsx` — persistance + migrations (après tout changement de modèle).
+6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 4 vues).
