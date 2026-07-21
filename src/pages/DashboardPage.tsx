@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { simInput } from "../lib/types";
+import { simInput, planMilestones } from "../lib/types";
 import { project } from "../lib/projection";
 import {
   netWealth, grossWealth, totalLiabilities,
@@ -191,7 +191,7 @@ export default function DashboardPage() {
                         <span className="spacer" />
                         <span className="dash-plan-end">{money(end.netWorth)} <em>en {end.year}</em></span>
                       </div>
-                      <NetWorthChart points={points} events={events} milestones={plan.milestones} mode="net" />
+                      <NetWorthChart points={points} events={events} milestones={planMilestones(state, plan)} mode="net" />
                     </motion.div>
                   );
                 })}

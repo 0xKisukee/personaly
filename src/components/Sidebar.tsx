@@ -27,8 +27,9 @@ export default function Sidebar() {
     if (!onProjection) navigate("/projection");
   };
 
-  // nouveau plan = plan VIDE (hypothèses par défaut, ni jalons ni événements).
-  // Pour repartir d'un plan existant, utiliser « Dupliquer » sur la page Projection.
+  // nouveau plan = plan VIDE (hypothèses par défaut, ni jalons ni événements propres).
+  // Les jalons sont GLOBAUX : le plan hérite de ceux de la racine (dont « Espérance de vie »
+  // au premier lancement). Pour repartir d'un plan existant, utiliser « Dupliquer ».
   const addPlan = () => {
     update((s) => {
       const plan: Plan = { ...structuredClone(DEFAULT_PLAN), id: uid(), name: `Plan ${s.plans.length + 1}` };

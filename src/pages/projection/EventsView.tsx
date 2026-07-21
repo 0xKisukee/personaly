@@ -4,14 +4,18 @@ import MilestonesEditor from "../../components/MilestonesEditor";
 import { IconEdit, IconPlus, IconTrash } from "../../components/icons";
 import { type AppStateLike, eventSummary } from "./eventHelpers";
 
-/** Vue Jalons & Événements : éditeur de jalons du plan + liste des événements datés. */
+/** Vue Jalons & Événements : jalons GLOBAUX + jalons du plan + liste des événements. */
 export default function EventsView({
-  milestones, birthYear, onMilestonesChange,
+  globalMilestones, planMilestones, onGlobalChange, onPlanChange,
+  milestones, birthYear,
   events, like, onNew, onEdit, onDelete, onToggle,
 }: {
-  milestones: Milestone[];
+  globalMilestones: Milestone[]; // source de vérité, tous les plans
+  planMilestones: Milestone[]; // propres à ce plan (supplément)
+  onGlobalChange: (ms: Milestone[]) => void;
+  onPlanChange: (ms: Milestone[]) => void;
+  milestones: Milestone[]; // combiné (global ∪ plan) — pour l'ancrage des événements
   birthYear: number | null;
-  onMilestonesChange: (ms: Milestone[]) => void;
   events: PlannedEvent[]; // déjà triés par année effective
   like: AppStateLike;
   onNew: () => void;
@@ -22,9 +26,21 @@ export default function EventsView({
   return (
     <section className="section" style={{ marginTop: 0 }}>
       <MilestonesEditor
-        milestones={milestones}
+        title="Jalons communs (tous les plans)"
+        milestones={globalMilestones}
         birthYear={birthYear}
-        onChange={onMilestonesChange}
+        onChange={onGlobalChange}
+        hint={<>Le <b>calendrier de vie</b> partagé par tous les plans (Retraite, Achat maison…) — c'est la source
+          de vérité sur laquelle s'ancrent les <b>flux</b>.</>}
+      />
+      <div className="divider" style={{ margin: "24px 0" }} />
+      <MilestonesEditor
+        title="Jalons propres à ce plan"
+        milestones={planMilestones}
+        birthYear={birthYear}
+        onChange={onPlanChange}
+        hint={<>Des jalons <b>en supplément</b>, valables uniquement dans ce plan (pour ancrer des événements de
+          scénario). Ils s'ajoutent aux jalons communs.</>}
       />
       <div className="divider" style={{ margin: "28px 0" }} />
       <div className="section-head">

@@ -359,6 +359,8 @@ export const DEFAULT_PROJECTION: ProjectionParams = {
 export interface Plan {
   id: string;
   name: string;
+  /** Jalons PROPRES à ce plan (en supplément des jalons GLOBAUX de `AppState`).
+   *  Le jeu effectif d'un plan = jalons globaux ∪ jalons du plan (voir `simInput`). */
   milestones: Milestone[];
   events: PlannedEvent[];
   projection: ProjectionParams;
@@ -393,6 +395,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export interface AppState {
   profile: Profile;
   settings: AppSettings;
+  /** Jalons GLOBAUX (source de vérité, présents dans TOUS les plans) : c'est le
+   *  calendrier de vie (Retraite, Achat maison…) sur lequel s'ancrent les flux.
+   *  Un plan peut en ajouter des siens en supplément (`Plan.milestones`). */
+  milestones: Milestone[];
   assets: Asset[];
   liabilities: Liability[];
   incomes: IncomeItem[]; // revenus complémentaires (salaire, aide…)
@@ -401,9 +407,16 @@ export interface AppState {
   activePlanId: string;
 }
 
+/** Jalon global par défaut : Espérance de vie. Son id est STABLE (`esperance-vie`)
+ *  pour être recalé à « naissance + 85 ans » quand la date de naissance est saisie
+ *  (cf. SettingsModal). Année provisoire tant que la naissance est inconnue. */
+export const ESPERANCE_MILESTONE_ID = "esperance-vie";
+export const ESPERANCE_AGE = 85;
+
 export const EMPTY_STATE: AppState = {
   profile: { firstName: "", birthDate: "" },
   settings: DEFAULT_SETTINGS,
+  milestones: [{ id: ESPERANCE_MILESTONE_ID, label: "Espérance de vie", year: new Date().getFullYear() + 60 }],
   assets: [],
   liabilities: [],
   incomes: [],
@@ -429,7 +442,12 @@ export interface SimState {
   events: PlannedEvent[];
 }
 
-/** Compose l'entrée du moteur pour un plan. */
+/** Jeu de jalons effectif d'un plan : globaux (source de vérité) + propres au plan. */
+export function planMilestones(s: Pick<AppState, "milestones">, plan: Pick<Plan, "milestones">): Milestone[] {
+  return [...s.milestones, ...plan.milestones];
+}
+
+/** Compose l'entrée du moteur pour un plan (jalons = globaux ∪ propres au plan). */
 export function simInput(s: AppState, plan: Plan): SimState {
   return {
     profile: s.profile,
@@ -437,7 +455,7 @@ export function simInput(s: AppState, plan: Plan): SimState {
     liabilities: s.liabilities,
     incomes: s.incomes,
     expenses: s.expenses,
-    milestones: plan.milestones,
+    milestones: planMilestones(s, plan),
     events: plan.events,
   };
 }

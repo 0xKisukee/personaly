@@ -105,8 +105,8 @@ function Bounds({ item, milestones }: {
 }
 
 export default function FluxPage() {
-  // `plan` : uniquement pour résoudre les ancrages jalon des flux (jalons du plan actif)
-  const { state, plan, update } = useStore();
+  // les flux s'ancrent sur les jalons GLOBAUX (source de vérité, communs à tous les plans)
+  const { state, update } = useStore();
   const [view, setView] = useState<Period>("yearly");
   const [tab, setTab] = useState<"all" | "in" | "out">("all");
   const [incomeDraft, setIncomeDraft] = useState<IncomeItem | null>(null);
@@ -303,14 +303,14 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.incomes.map((it, i) => {
               const Meta = INCOME_META[it.category];
-              const b = flowBounds(it, plan.milestones);
+              const b = flowBounds(it, state.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
                 <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic txt-gain"><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /></div>
                   </div>
                   <div className="row-val txt-gain">{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -379,14 +379,14 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {state.expenses.map((it, i) => {
               const Meta = EXPENSE_META[it.category];
-              const b = flowBounds(it, plan.milestones);
+              const b = flowBounds(it, state.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
                 <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className={"row-ic " + (it.category === "impot" ? "txt-brass" : "txt-drain")}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /></div>
                   </div>
                   <div className="row-val txt-drain">−{money(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -495,7 +495,7 @@ export default function FluxPage() {
           kind="income"
           draft={incomeDraft}
           categories={INCOME_META}
-          milestones={plan.milestones}
+          milestones={state.milestones}
           onChange={(d) => setIncomeDraft(d as IncomeItem)}
           onSave={() => saveIncome(incomeDraft)}
           onClose={() => setIncomeDraft(null)}
@@ -506,7 +506,7 @@ export default function FluxPage() {
           kind="expense"
           draft={expenseDraft}
           categories={EXPENSE_META}
-          milestones={plan.milestones}
+          milestones={state.milestones}
           onChange={(d) => setExpenseDraft(d as ExpenseItem)}
           onSave={() => saveExpense(expenseDraft)}
           onClose={() => setExpenseDraft(null)}

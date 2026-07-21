@@ -20,6 +20,7 @@ const asset = (over: Partial<Asset>): Asset => ({
 const state = (over: Partial<AppState>): AppState => ({
   profile: { firstName: "", birthDate: "" },
   settings: DEFAULT_SETTINGS,
+  milestones: [],
   assets: [], liabilities: [], incomes: [], expenses: [],
   plans: [DEFAULT_PLAN], activePlanId: DEFAULT_PLAN.id, ...over,
 });

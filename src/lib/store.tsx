@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Milestone, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -88,6 +88,20 @@ function normalizeEvents(raw: unknown): PlannedEvent[] {
 }
 
 /**
+ * Jalons GLOBAUX : dans le format courant ils vivent à la RACINE. Dans l'ancien
+ * format ils vivaient dans chaque plan → on les HISSE en global (fusion dédupée par
+ * id) et on vide les jalons propres aux plans (ils redeviennent des suppléments,
+ * vides au départ). Idempotent si la racine porte déjà `milestones`.
+ */
+function hoistMilestones(rootMilestones: unknown, plans: Plan[]): { milestones: Milestone[]; plans: Plan[] } {
+  if (Array.isArray(rootMilestones)) return { milestones: rootMilestones as Milestone[], plans };
+  const seen = new Set<string>();
+  const global: Milestone[] = [];
+  for (const pl of plans) for (const m of pl.milestones ?? []) if (m && !seen.has(m.id)) { seen.add(m.id); global.push(m); }
+  return { milestones: global, plans: plans.map((pl) => ({ ...pl, milestones: [] })) };
+}
+
+/**
  * Migre un objet JSON quelconque (localStorage OU fichier importé) vers la forme
  * courante d'`AppState`. Tolérant : un objet vide/invalide retombe sur EMPTY_STATE.
  * Exporté pour les tests (round-trip export/import).
@@ -104,7 +118,7 @@ export function migrateState(input: unknown): AppState {
   if (!Array.isArray(parsed.plans)) {
     const plan: Plan = {
       ...DEFAULT_PLAN,
-      milestones: parsed.milestones ?? [],
+      milestones: [], // les jalons de l'ancien état plat deviennent GLOBAUX (racine)
       events: normalizeEvents(parsed.events),
       projection: loadProjection(parsed.projection),
     };
@@ -112,6 +126,7 @@ export function migrateState(input: unknown): AppState {
       ...EMPTY_STATE,
       profile: parsed.profile ?? EMPTY_STATE.profile,
       settings: { ...DEFAULT_SETTINGS, horizon: plan.projection.horizon ?? DEFAULT_SETTINGS.horizon },
+      milestones: Array.isArray(parsed.milestones) ? parsed.milestones : [],
       assets: normalizeAssets(parsed.assets),
       liabilities: normalizeLiabilities(parsed.liabilities),
       incomes: parsed.incomes ?? [],
@@ -145,13 +160,15 @@ export function migrateState(input: unknown): AppState {
     ...(parsed.settings ?? {}),
     horizon: parsed.settings?.horizon ?? activePlan.projection.horizon ?? DEFAULT_SETTINGS.horizon,
   };
+  const { milestones, plans: finalPlans } = hoistMilestones(parsed.milestones, plans);
   return {
     ...EMPTY_STATE,
     ...parsed,
     settings,
+    milestones,
     assets: normalizeAssets(parsed.assets),
     liabilities: normalizeLiabilities(parsed.liabilities),
-    plans,
+    plans: finalPlans,
     activePlanId,
   };
 }

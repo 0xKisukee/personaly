@@ -78,9 +78,10 @@ src/
   la réalité d'aujourd'hui, **source de vérité unique**, éditée dans Patrimoine / Flux.
   Une simulation ne les modifie **jamais**.
 - **Plans** (`state.plans[]`, actif = `activePlanId`) = des couches **hypothétiques**
-  posées dessus : chacune a **ses** jalons, **ses** événements, **ses** hypothèses. Sélection /
-  création dans la sidebar (« Nouveau plan » = **plan vide**, hypothèses par défaut) ;
-  « Dupliquer » (page Projection) = **copie** du plan actif (jalons/événements/hypothèses).
+  posées dessus : chacun a **ses** événements, **ses** hypothèses, et **ses jalons propres**
+  (en supplément des jalons globaux — voir « Jalons » plus bas). Sélection / création dans la
+  sidebar (« Nouveau plan » = **plan vide**, hypothèses par défaut, hérite des jalons globaux) ;
+  « Dupliquer » (page Projection) = **copie** du plan actif (jalons propres/événements/hypothèses).
 
 Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `SimState` via
 `simInput(state, plan)`.
@@ -93,11 +94,12 @@ Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `S
 AppState = {
   profile:   { firstName, birthDate }
   settings:  { horizon }                     // GLOBAL (voir « horizon global » plus bas)
+  milestones: Milestone[]                    // JALONS GLOBAUX (voir « Jalons » plus bas)
   assets, liabilities, incomes, expenses     // FINANCES COURANTES
   plans: Plan[], activePlanId                // SIMULATIONS
 }
-Plan = { id, name, milestones[], events[], projection: ProjectionParams }
-SimState = simInput(state, plan)             // entrée du moteur
+Plan = { id, name, milestones[], events[], projection: ProjectionParams }  // milestones = propres au plan (supplément)
+SimState = simInput(state, plan)             // entrée du moteur : jalons = globaux + propres au plan
 ```
 
 ### Actif — DEUX mécanismes de gain indépendants (la distinction centrale)
@@ -134,11 +136,19 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
 (catégorie `impot`) — pas de moteur fiscal. Bornes `startYear`/`endYear` **ou** ancrage jalon
 `startRef`/`endRef` (prioritaire). `growth` propre au flux (sinon suit l'inflation si indexé).
 
-### Jalons & événements (par plan)
+### Jalons & événements
 
 - **Milestone** = année nommée (`{id,label,year}`, ex. Retraite). Les flux/événements s'y
   **ancrent** via `MilestoneRef{milestoneId, offset?}` : déplacer le jalon recale tout. L'année
   en dur survit comme secours si le jalon disparaît (`refYear`/`eventYear`/`flowBounds`).
+- **Jalons GLOBAUX vs propres au plan.** Les jalons vivent à la **racine** (`state.milestones`) :
+  ils sont **liés aux finances courantes** (source de vérité) et **présents dans tous les plans**.
+  Un plan peut en ajouter **en supplément** (`plan.milestones`, temporaires). Le moteur reçoit
+  l'union via `planMilestones(state, plan) = [...state.milestones, ...plan.milestones]`.
+  Au **premier lancement**, un jalon global par défaut « **Espérance de vie** » est posé
+  (`birthYear + ESPERANCE_AGE`, 85 ans ; recalé quand on change la date de naissance dans les
+  Paramètres). S'il est supprimé, il n'est **pas** réajouté. Un **nouveau plan** est vide et
+  hérite simplement des jalons globaux.
 - **PlannedEvent** = 6 types datés (ou ancrés) : `buy` `sell` `loan` `cash` `repay` `deposit`.
   **Atomiques** (un achat financé = `loan` + `buy` la même année). Transferts **neutres** pour
   le net, sauf frais (`eventFees`), plus-value réalisée (`eventGain`) et rentrées/sorties
@@ -172,8 +182,9 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par
   SVG** en 3 modes (net / composition actifs·épargne·dettes / **Plans** : une courbe par plan) avec
   jalons `◇`, marqueurs cliquables (`⚑` événement → édite, `✓` fin d'emprunt, `◆` FI) + légende ;
   **table annuelle** → clic = modale **détail d'une année** (composition dépliable).
-- **Événements** — éditeur des jalons du plan (`MilestonesEditor`, suggestions Retraite/Espérance)
-  + liste des 6 événements (saisie via `WhenPicker` : année précise ou jalon ± n).
+- **Événements** — deux éditeurs `MilestonesEditor` : **jalons communs** (globaux, tous les plans)
+  et **jalons propres à ce plan** (supplément) + liste des 6 événements (saisie via `WhenPicker` :
+  année précise ou jalon ± n).
 - **Cash-flow** — **Sankey** (`SankeyChart`, SVG maison) d'une année : sources → trésorerie →
   affectations ; l'épargne est le **poste d'équilibre** (surplus « vers l'épargne » / déficit « puisé »).
 - **Probabilité** — **Monte Carlo** : jauge de **taux de succès** + **éventail** de percentiles

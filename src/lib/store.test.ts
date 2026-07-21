@@ -43,7 +43,8 @@ describe("loadState", () => {
     expect(s.plans).toHaveLength(1);
     expect(s.activePlanId).toBe(s.plans[0].id);
     expect(s.plans[0].name).toBe("Plan principal");
-    expect(s.plans[0].milestones[0].label).toBe("Retraite");
+    expect(s.milestones[0].label).toBe("Retraite"); // jalons désormais GLOBAUX (racine)
+    expect(s.plans[0].milestones).toHaveLength(0); // plan-spécifiques vides
     expect(s.plans[0].events).toHaveLength(2);
     expect(s.plans[0].events[0].disabled).toBeUndefined();
     expect(s.plans[0].events[1].disabled).toBe(true);
@@ -116,6 +117,19 @@ describe("loadState", () => {
   it("horizon devient global : hissé depuis le plan actif si absent de settings", () => {
     write({ plans: [{ id: "p1", name: "P", projection: { horizon: 40 } }], activePlanId: "p1" });
     expect(loadState().settings.horizon).toBe(40);
+  });
+
+  it("jalons GLOBAUX : les jalons des plans sont hissés à la racine (fusion + dédup par id)", () => {
+    write({
+      plans: [
+        { id: "p1", name: "A", milestones: [{ id: "m1", label: "Retraite", year: 2060 }, { id: "m2", label: "Achat", year: 2030 }], projection: {} },
+        { id: "p2", name: "B", milestones: [{ id: "m1", label: "Retraite", year: 2060 }, { id: "m3", label: "Enfants", year: 2028 }], projection: {} },
+      ],
+      activePlanId: "p1",
+    });
+    const s = loadState();
+    expect(s.milestones.map((m) => m.id).sort()).toEqual(["m1", "m2", "m3"]); // fusionnés, dédupés
+    expect(s.plans.every((p) => p.milestones.length === 0)).toBe(true); // vidés (deviennent globaux)
   });
 
   it("migre la taxonomie d'actifs : livret_epargne & placement → epargne (versements préservés)", () => {

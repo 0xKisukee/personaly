@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import type { ReactNode } from "react";
 import type { Milestone } from "../lib/types";
 import { uid } from "../lib/format";
 import { IconPlus, IconTrash } from "./icons";
@@ -9,15 +10,14 @@ const SUGGESTIONS: { label: string; atAge: number }[] = [
   { label: "Espérance de vie", atAge: 85 },
 ];
 
-/**
- * Éditeur des jalons DU PLAN ACTIF : chaque plan a les siens (copiés à la
- * création du plan, mêmes ids — un « plan retraite à 60 » ne déplace que sa
- * propre Retraite). Les flux et événements ancrés dessus suivent.
- */
-export default function MilestonesEditor({ milestones, birthYear, onChange }: {
+/** Éditeur d'un jeu de jalons (année nommée). Réutilisé pour les jalons GLOBAUX
+ *  et pour les jalons propres à un plan (via `title`/`hint`). */
+export default function MilestonesEditor({ milestones, birthYear, onChange, title = "Jalons", hint }: {
   milestones: Milestone[];
   birthYear: number | null;
   onChange: (ms: Milestone[]) => void;
+  title?: string;
+  hint?: ReactNode;
 }) {
   const currentYear = new Date().getFullYear();
 
@@ -37,7 +37,7 @@ export default function MilestonesEditor({ milestones, birthYear, onChange }: {
   return (
     <div className="ms-editor">
       <div className="section-head" style={{ marginBottom: milestones.length ? 12 : 12 }}>
-        <h2 style={{ fontSize: 19 }}>Jalons du plan</h2>
+        <h2 style={{ fontSize: 19 }}>{title}</h2>
         <span className="count">{milestones.length}</span>
         <span className="spacer" />
         {missingSuggestions.map((sg) => (
@@ -52,8 +52,10 @@ export default function MilestonesEditor({ milestones, birthYear, onChange }: {
 
       {milestones.length === 0 ? (
         <p className="help" style={{ marginBottom: 8 }}>
-          Un jalon est une <b>année nommée</b> (Retraite, Achat maison…) propre à ce plan : ancre un flux ou un
-          événement dessus, et déplacer le jalon recale tout d'un coup.
+          {hint ?? (
+            <>Un jalon est une <b>année nommée</b> (Retraite, Achat maison…) : ancre un flux ou un événement
+            dessus, et déplacer le jalon recale tout d'un coup.</>
+          )}
         </p>
       ) : (
         <div className="rows" style={{ maxWidth: 560 }}>

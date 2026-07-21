@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../lib/store";
 import { projectionPath, viewFromSlug, type ProjectionViewId } from "../routes";
 import type { PlannedEvent, ProjectionParams } from "../lib/types";
-import { eventYear, simInput } from "../lib/types";
+import { eventYear, simInput, planMilestones } from "../lib/types";
 import { project } from "../lib/projection";
 import { canReceiveDeposits } from "../lib/types";
 import { grossWealth, totalLiabilities } from "../lib/selectors";
@@ -60,6 +60,9 @@ export default function ProjectionPage() {
   // finances courantes + couche du plan = entrée du moteur
   const projState = useMemo(() => simInput(state, plan), [state, plan]);
 
+  // jalons EFFECTIFS du plan actif = globaux (source de vérité) ∪ propres au plan
+  const milestones = useMemo(() => planMilestones(state, plan), [state.milestones, plan]);
+
   const { points, events, warnings, fiYearIndex } = useMemo(
     () => project(projState, p),
     [projState, p]
@@ -68,8 +71,8 @@ export default function ProjectionPage() {
   // vue de référence pour eventSummary / listes d'actifs vendables… (plan actif)
   const like: AppStateLike = useMemo(() => ({
     assets: state.assets, liabilities: state.liabilities,
-    events: plan.events, milestones: plan.milestones,
-  }), [state.assets, state.liabilities, plan]);
+    events: plan.events, milestones,
+  }), [state.assets, state.liabilities, plan, milestones]);
 
   // mode Plans : une courbe par PLAN, chacun avec ses jalons/événements/hypothèses
   // (horizon et euros constants alignés sur le plan actif pour partager l'axe)
@@ -96,7 +99,7 @@ export default function ProjectionPage() {
   const delEvent = (id: string) => updatePlan((pl) => ({ ...pl, events: pl.events.filter((x) => x.id !== id) }));
   const toggleEvent = (id: string) =>
     updatePlan((pl) => ({ ...pl, events: pl.events.map((x) => (x.id === id ? { ...x, disabled: !x.disabled } : x)) }));
-  const sortedEvents = [...plan.events].sort((a, b) => eventYear(a, plan.milestones) - eventYear(b, plan.milestones));
+  const sortedEvents = [...plan.events].sort((a, b) => eventYear(a, milestones) - eventYear(b, milestones));
   const editEvent = (id: string) => {
     const ev = plan.events.find((x) => x.id === id);
     if (ev) setEvDraft({ ...ev });
@@ -193,7 +196,7 @@ export default function ProjectionPage() {
               setChartMode={setChartMode}
               planSeries={planSeries}
               plansCount={state.plans.length}
-              milestones={plan.milestones}
+              milestones={milestones}
               eligibleAssets={eligibleAssets}
               onEditEvent={editEvent}
               onSelectYear={setSelYear}
@@ -202,9 +205,12 @@ export default function ProjectionPage() {
 
           {view === "events" && (
             <EventsView
-              milestones={plan.milestones}
+              globalMilestones={state.milestones}
+              planMilestones={plan.milestones}
+              onGlobalChange={(ms) => update((s) => ({ ...s, milestones: ms }))}
+              onPlanChange={(ms) => updatePlan({ milestones: ms })}
+              milestones={milestones}
               birthYear={state.profile.birthDate ? new Date(state.profile.birthDate).getFullYear() : null}
-              onMilestonesChange={(ms) => updatePlan({ milestones: ms })}
               events={sortedEvents}
               like={like}
               onNew={() => setEvDraft(emptyEvent(points[points.length - 1].year))}
