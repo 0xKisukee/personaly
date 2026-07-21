@@ -591,17 +591,16 @@ Historique conservé — question → **ta réponse** → décision appliquée d
 Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 
 **Reprise rapide**
-- **Dernière session :** ✅ **Phase 3 (Langage couleur de performance)**. Métrique
-  `assetPerformance()` (total = croissance + rendement distribué net / valeur) dans
-  `selectors.ts` ; tokens divergents `--perf-*` (drain→neutre→gain, 3 paliers via
-  `color-mix`) ; primitive `PerformanceBadge` (+ `perfColor`) ; appliqués à la liste
-  Patrimoine (barre d'accent gauche + badge) avec **tri Ordre/Rendement/Valeur**. Build +
-  **127 tests** verts, boot OK. **Sparkline retirée** (sans échelle = inutile ; incohérence
-  couleur/direction sur un actif qui s'apprécie mais coûte net). **NB modèle :**
-  `compte_courant` **supprimé** (fusionné dans `liquidites`) — seul `epargne` reçoit les versements.
-- **Prochaine étape :** Phase 4 — Dashboard (route `/`, hero patrimoine + répartition colorée
-  par la perf + mini-projection). Réutilise `assetPerformance`/`perfColor`/`Sparkline`.
-- **Branche en cours :** `main` (Phases 0+1+2 committées ; **Phase 3 en working tree, pas encore committée**).
+- **Dernière session :** ✅ **Phase 4 (Dashboard / 00 — Accueil)**. Nouvelle route `/` =
+  `DashboardPage` (l'app ouvre dessus) ; nav sidebar « 00 Accueil » (numérotation 0-indexée
+  → aligne Profil 01 … Projection 04). Blocs cliquables vers leur page : hero patrimoine,
+  **trajectoire** (net à +1/+5/+10 ans via une passe moteur mémoïsée), **flux mensuels** +
+  taux d'épargne, **répartition** des actifs (barres teintées par la perf), **à venir**
+  (prochain jalon / événement). État vide → CTA « Commence par ton patrimoine ». Build +
+  **127 tests** verts, boot OK.
+- **Prochaine étape :** Phase 5 — Refonte page par page (Patrimoine → Flux → Projection) avec
+  le design system + la taxonomie + le langage de perf.
+- **Branche en cours :** `main` (Phases 0→3 committées ; **Phase 4 en working tree, pas encore committée**).
 
 **État par phase**
 
@@ -611,13 +610,17 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 1 — Design system (tokens, primitives, `MoneyInput`, Profil pilote) | ✅ (structurel) | `styles/{tokens,base,primitives,layout,charts}.css` (split contigu iso-visuel) ; `ui/{Button,Input,MoneyInput,Field,Select,Segment,Card,Tag}` + barrel ; Profil migré. **Reste optionnel :** `Stat`/`Tooltip`/`Row` + déplacer `Modal`→`ui/` (différés en phase 5, avec vrais consommateurs) ; rafraîchissement de palette §12 (non appliqué, on est resté iso-visuel). |
 | 2 — Taxonomie d'actifs (`epargne`, `liquidites`, flag `rented`, presets, migration) | ✅ | Catégories : `immobilier`(+`rented`), `epargne`(fusion), `compte_courant`, `liquidites`, `vehicule`, `autre`. `lib/assets.ts` (registre : label/icône/accent/champs/presets/`defaultVolatility`/`normalizeAsset`). Migration `livret_epargne`+`placement`→`epargne`. Invariant testé : bloc UI « deposits » ⇔ `DEPOSIT_ELIGIBLE`. **Reste optionnel :** EventModal(buy) garde un mini-formulaire d'actif (pas les presets) → parité en phase 5. |
 | 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
-| 4 — Dashboard | ⬜ | — |
+| 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
 | 5 — Refonte pages (Patrimoine → Flux → Projection) | ⬜ | — |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
 | 7 — Graphes (SVG poli) | ⬜ | — |
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
+- **Accueil = trajectoire de BASE, sans plan.** Les plans sont **hypothétiques** et vivent sur
+  la page Projection. Le Dashboard projette les finances courantes sans événements/jalons ni
+  hypothèses de plan (`DEFAULT_PROJECTION`), et « À venir » ne liste que des faits de base (flux
+  datés, emprunts soldés). Ne jamais réintroduire `plan.*` dans `DashboardPage`.
 - **⚠️ Perf de scroll (macOS) — 2 pièges à bannir :** (1) `backdrop-filter: blur` sur un
   overlay derrière un conteneur qui scrolle (ex. `.scrim` de la modale) → re-rasterisation
   plein écran par frame ; retiré, remplacé par un assombrissement opaque. (2)
@@ -638,6 +641,20 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Phase 4 (Dashboard).** `routes.tsx` : route `accueil` (`/`) en tête,
+  `DEFAULT_PATH = "/"` ; `App.tsx` : `/` → `DashboardPage` ; `Sidebar` : numérotation nav
+  0-indexée (`00 Accueil` … `04 Projection`, aligne les eyebrows des pages). Nouveau
+  `pages/DashboardPage.tsx` : hero (net/brut/passifs, réutilise `.wealth-hero`) + 4 cartes
+  cliquables (`DashCard` → navigate) : **Trajectoire** (net à +1/+5/+10 ans), **Flux mensuels**
+  (revenus/sorties/épargne + barre de taux d'épargne), **Répartition** (top 6 actifs, part du
+  brut, barre teintée par `perfColor(assetPerformance)`), **À venir**. État vide → CTA vers
+  Patrimoine. CSS `.dash-*` (grille 2 col. → 1 col. < 900px). **Décision (retour utilisateur) :
+  l'Accueil ignore les PLANS** (hypothétiques → page Projection) → il montre la trajectoire de
+  BASE : `project(simInput(state, {…plan vide}), { …DEFAULT_PROJECTION, horizon 10 })` (aucun
+  événement/jalon, hypothèses par défaut) ; et « À venir » liste les changements de la base
+  (flux datés en dur qui démarrent/s'arrêtent + emprunts soldés via `termMonths`), pas les
+  jalons/événements de plan. `plan` n'est plus lu par la page. **Choix :** pas de mini-graphe
+  (chiffres d'horizon labellisés = scalés, cohérent avec l'abandon de la Sparkline). Build + 127 verts.
 - **2026-07-21 — Phase 3 (Langage couleur de perf).** `selectors.ts` : `assetPerformance(a)`
   → `{ pct, latentPct, cashPct, latentEur, cashEur, netEur }` (total = growthRate + revenu
   net/valeur, garde value=0) ; `assetValueSeries(a, years)` (compose + plancher, pour la

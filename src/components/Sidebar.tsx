@@ -54,7 +54,7 @@ export default function Sidebar() {
             data-active={isActive(r.path)}
             onClick={() => navigate(r.path)}
           >
-            <span className="nav-idx">{String(i + 1).padStart(2, "0")}</span>
+            <span className="nav-idx">{String(i).padStart(2, "0")}</span>
             <span className="nav-label">{r.label}</span>
             {r.soon && <span className="nav-soon">bientôt</span>}
           </button>

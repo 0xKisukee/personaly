@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { StoreProvider } from "./lib/store";
 import { DEFAULT_PATH } from "./routes";
 import Sidebar from "./components/Sidebar";
+import DashboardPage from "./pages/DashboardPage";
 import ProfilPage from "./pages/ProfilPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
 import FluxPage from "./pages/FluxPage";
@@ -31,7 +32,7 @@ function Shell() {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
             <Routes location={location}>
-              <Route path="/" element={<Navigate to={DEFAULT_PATH} replace />} />
+              <Route path="/" element={<DashboardPage />} />
               <Route path="/profil" element={<ProfilPage />} />
               <Route path="/patrimoine" element={<PatrimoinePage />} />
               <Route path="/flux" element={<FluxPage />} />

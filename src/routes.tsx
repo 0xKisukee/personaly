@@ -4,7 +4,7 @@
    dans l'URL (deep-link, back/forward, refresh sans perte de vue).
    =========================================================================== */
 
-export type RouteId = "profil" | "patrimoine" | "flux" | "projection";
+export type RouteId = "accueil" | "profil" | "patrimoine" | "flux" | "projection";
 
 export interface RouteDef {
   id: RouteId;
@@ -13,16 +13,17 @@ export interface RouteDef {
   soon?: boolean;
 }
 
-/** Routes de premier niveau affichées dans la nav de la sidebar. */
+/** Routes de premier niveau affichées dans la nav de la sidebar (index = n° « 00 »…). */
 export const ROUTES: RouteDef[] = [
+  { id: "accueil", path: "/", label: "Accueil" },
   { id: "profil", path: "/profil", label: "Profil" },
   { id: "patrimoine", path: "/patrimoine", label: "Patrimoine" },
   { id: "flux", path: "/flux", label: "Flux" },
   { id: "projection", path: "/projection", label: "Projection" },
 ];
 
-/** Route d'atterrissage par défaut (jusqu'au Dashboard de la phase 4). */
-export const DEFAULT_PATH = "/patrimoine";
+/** Route d'atterrissage par défaut : le Dashboard (00 — Accueil). */
+export const DEFAULT_PATH = "/";
 
 /* ----------------------- Sous-vues de la page Projection ----------------------
    La page Projection a 4 vues portées par un segment d'URL : `/projection/:vue`.
