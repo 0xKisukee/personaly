@@ -377,7 +377,6 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
   const Meta = assetType(a.category);
   const inc = assetYearlyIncome(a);
   const chg = toYearly(a.charges);
-  const net = inc - chg; // bénéfice réel de détention
   const perf = assetPerformance(a);
   const perfCol = perfColor(perf.pct);
   const sp = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${percent(Math.abs(x))}`;
@@ -398,26 +397,33 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
         <Meta.icon size={20} />
       </div>
       <div className="row-main">
-        <div className="row-title">{a.label || Meta.label}</div>
+        <div className="row-title">
+          {a.label || Meta.label}
+          {(perf.pct !== 0 || a.growthRate !== 0) && <PerformanceBadge pct={perf.pct} title={perfTitle} />}
+        </div>
         <div className="row-meta">
           <span>{Meta.label}</span>
+          {/* plus-value LATENTE (croissance capitalisée) en € — rend visible le gain du
+              growthRate même sans revenu distribué (ex. PEA +7 % → +2 100 €/an). */}
+          {a.growthRate !== 0 && (
+            <>· <span style={{ color: perf.latentEur >= 0 ? "var(--gain)" : "var(--drain)" }}>croissance {signedMoney(perf.latentEur)} /an</span></>
+          )}
           {a.incomeMode === "rate" && a.incomeRate ? (
             <>· <span style={{ color: "var(--gain)" }}>revenu {percent(a.incomeRate)} versé · {money(inc)} /an</span></>
           ) : a.incomeMode === "amount" && inc > 0 ? (
             <>· <span style={{ color: "var(--gain)" }}>revenu {money(inc)} /an</span></>
           ) : null}
           {chg > 0 && <>· <span style={{ color: "var(--drain)" }}>charges {money(chg)} /an</span></>}
-          {(perf.pct !== 0 || a.growthRate !== 0) && <PerformanceBadge pct={perf.pct} title={perfTitle} />}
         </div>
       </div>
       <div className="row-val">
         {money(a.value)}
-        {inc === 0 && chg === 0 ? (
-          <div className="flux zero">pas de revenu</div>
+        {/* gain TOTAL/an = plus-value (croissance) + revenu net — cohérent avec le badge % */}
+        {perf.netEur === 0 ? (
+          <div className="flux zero">stable</div>
         ) : (
-          <div className="flux" style={{ color: net >= 0 ? "var(--gain)" : "var(--drain)" }}
-            title={chg > 0 ? `revenu ${money(inc)} − charges ${money(chg)}` : undefined}>
-            {signedMoney(net)} /an net
+          <div className="flux" style={{ color: perf.netEur >= 0 ? "var(--gain)" : "var(--drain)" }} title={perfTitle}>
+            {signedMoney(perf.netEur)} /an
           </div>
         )}
       </div>
