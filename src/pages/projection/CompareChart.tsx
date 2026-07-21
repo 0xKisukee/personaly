@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { motion } from "motion/react";
 import type { YearPoint } from "../../lib/projection";
 import { money } from "../../lib/format";
 import { compactEur, timeFractions, nearestIndex, SERIES_COLORS } from "./chartUtils";
@@ -56,8 +57,9 @@ export default function CompareChart({ series }: { series: { name: string; point
           <line x1={M.left} x2={W - M.right} y1={y(0)} y2={y(0)} stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="4 4" />
         )}
         {series.map((s, si) => (
-          <path key={s.name} d={line(s.points)} fill="none"
-            stroke={SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth="2" strokeLinejoin="round" />
+          <motion.path key={s.name} d={line(s.points)} fill="none"
+            stroke={SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth="2" strokeLinejoin="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut", delay: si * 0.06 }} />
         ))}
         {xTickIdx.map((i) => (
           <text key={i} x={x(i)} y={H - 14} textAnchor="middle" className="chart-axis">{pts0[i].year}</text>
@@ -74,10 +76,11 @@ export default function CompareChart({ series }: { series: { name: string; point
       </svg>
 
       {hover !== null && (
-        <div className="chart-tip" style={{ left: `${(x(hover) / W) * 100}%`, top: `${(M.top / H) * 100}%` }}>
+        <div className="chart-tip below" style={{ left: `${(x(hover) / W) * 100}%`, top: `${(M.top / H) * 100}%` }}>
           <div className="chart-tip-year">{pts0[hover].year}{pts0[hover].age !== null ? ` · ${pts0[hover].age} ans` : ""}</div>
           {series.map((s, si) => (
-            <div key={s.name} className="chart-tip-sub" style={{ color: SERIES_COLORS[si % SERIES_COLORS.length] }}>
+            <div key={s.name} className="chart-tip-sub">
+              <i className="tip-dot" style={{ background: SERIES_COLORS[si % SERIES_COLORS.length] }} />
               {s.name} · {money(s.points[hover].netWorth)}
             </div>
           ))}

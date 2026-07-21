@@ -7,8 +7,11 @@
 const compact = new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 });
 export const compactEur = (n: number) => compact.format(n) + " €";
 
-/** Couleurs de séries (mode Plans, comparaison inter-plans). */
-export const SERIES_COLORS = ["var(--brass-bright)", "var(--gain)", "var(--sage)", "var(--drain)", "#8fa8c8", "#c8a0d0"];
+/** Couleurs de séries (mode Plans) — palette catégorielle validée (§tokens `--cat-*`),
+ *  cohérente avec les camemberts de répartition. Toujours accompagnées d'une légende. */
+export const SERIES_COLORS = [
+  "var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--sage-deep)",
+];
 
 // Positions horizontales proportionnelles au TEMPS RÉEL écoulé, pas à l'indice
 // d'année : l'année 0 ne couvre que les mois restants de l'année civile, donc son

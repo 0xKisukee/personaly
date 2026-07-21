@@ -187,7 +187,8 @@
 }
 .chart-legend {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   font-size: 12.5px;
   color: var(--ink-mute);
 }
@@ -205,6 +206,9 @@
 .chart-wrap {
   position: relative;
   width: 100%;
+  /* PAS d'overflow-x ici : ça forcerait overflow-y et clipperait le tooltip
+     (positionné en absolu au-dessus du tracé). Le scroll responsive vit sur
+     un conteneur sans overlay (ex. .sankey-wrap). */
 }
 .chart-svg {
   width: 100%;
@@ -229,6 +233,11 @@
   white-space: nowrap;
   z-index: 2;
 }
+/* variante « sous l'ancre » : pour un tooltip ancré en haut du tracé
+   (comparateur de plans), il descend au lieu de sortir par le haut du cadre. */
+.chart-tip.below {
+  transform: translate(-50%, 14px);
+}
 .chart-tip-year {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -244,9 +253,20 @@
   margin-top: 2px;
 }
 .chart-tip-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: var(--ink-mute);
   margin-top: 2px;
+}
+/* pastille d'identité (série / percentile) : la couleur porte l'identité, le texte
+   reste en encre (langage tooltip unifié, cf. skill dataviz). */
+.tip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
 }
 
 .proj-events {
@@ -585,6 +605,11 @@
 .sankey-wrap {
   width: 100%;
   margin-top: 8px;
+  overflow-x: auto; /* petit écran : scroll horizontal plutôt que labels illisibles */
+}
+/* seuil de lisibilité du Sankey (pas d'overlay HTML ici → le scroll ne clippe rien) */
+.sankey-wrap .chart-svg {
+  min-width: 640px;
 }
 .sankey-ribbon {
   fill-opacity: 0.16;

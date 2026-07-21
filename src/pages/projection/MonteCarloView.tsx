@@ -183,8 +183,8 @@ function FanChart({ bands, det }: { bands: MonteCarloBand[]; det: YearPoint[] })
         <div className="chart-tip" style={{ left: `${(x(hb.yearIndex) / W) * 100}%`, top: `${(y(hb.p50) / H) * 100}%` }}>
           <div className="chart-tip-year">{hb.year}{hb.age !== null ? ` · ${hb.age} ans` : ""}</div>
           <div className="chart-tip-val">{money(hb.p50)}</div>
-          <div className="chart-tip-sub" style={{ color: "var(--gain)" }}>P90 {compactEur(hb.p90)}</div>
-          <div className="chart-tip-sub" style={{ color: "var(--drain)" }}>P10 {compactEur(hb.p10)}</div>
+          <div className="chart-tip-sub"><i className="tip-dot" style={{ background: "var(--gain)" }} /> P90 {compactEur(hb.p90)}</div>
+          <div className="chart-tip-sub"><i className="tip-dot" style={{ background: "var(--drain)" }} /> P10 {compactEur(hb.p10)}</div>
         </div>
       )}
     </div>

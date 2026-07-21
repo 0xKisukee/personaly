@@ -157,7 +157,7 @@ export default function ProjectionView({
           {chartMode === "composition" && (
             <div className="chart-legend">
               <span><i style={{ background: "var(--sage)" }} /> Actifs</span>
-              <span><i style={{ background: "var(--gain)" }} /> Épargne</span>
+              <span><i style={{ background: "var(--brass)" }} /> Épargne</span>
               <span><i style={{ background: "var(--drain)" }} /> Dettes</span>
             </div>
           )}

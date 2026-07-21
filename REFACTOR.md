@@ -598,8 +598,9 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   taux d'épargne, **répartition** des actifs (barres teintées par la perf), **à venir**
   (prochain jalon / événement). État vide → CTA « Commence par ton patrimoine ». Build +
   **127 tests** verts, boot OK.
-- **Prochaine étape :** Phase 5 **terminée** (Patrimoine + Flux + Projection). Prochaine phase :
-  **Phase 6 — Onboarding + mode démo complet** (ou Phase 7 graphes / Phase 8 responsive+a11y).
+- **Prochaine étape :** Phases 5 + 7 **terminées**. Restent : **Phase 6 — Onboarding + mode
+  démo** (sautée pour l'instant) et **Phase 8 — Responsive · a11y · finitions** (dont
+  `prefers-reduced-motion` à câbler pour les transitions de graphes ajoutées en phase 7).
 - **Branche en cours :** `main`. Committé jusqu'à `9586971 phase 5 - flux 2`. **Projection
   (habillage) en working tree, pas encore committé.** Lien actif↔emprunt **abandonné**.
 
@@ -614,7 +615,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
 | 5 — Refonte pages (Patrimoine → Flux → Projection) | ✅ | **Projection FAIT** (habillage, moteur/4 vues intacts) : header horizons + onglets de vue + mode du graphe → `Segment` ; purge styles inline → utilitaires `.txt-*` + variante `.fi-banner.warn` + `.proj-net`. Légende des glyphes & panneau d'hypothèses (`.assum`) **déjà présents**. **Optionnel restant :** titre sur le panneau hypothèses, relecture modale « détail d'année », styles inline structurels (padding/width) non purgés (non sémantiques). **Flux** (compta inchangée) : purge styles inline → utilitaires `.txt-*`/`.tag-brass` ; toggles + select via `Segment`/`Select` ; hiérarchie sous-groupes (totaux alignés à droite + séparateurs) ; **onglets Tout/Entrants/Sortants**. **Patrimoine** : familles (`ASSET_FAMILIES`/`assetFamily` → Immobilier / Épargne & liquidités / Autres) ; liste **groupée par famille** + sous-totaux (valeur, net/an, **badge de rentabilité agrégée**) ; tri Valeur/Rendement/Nom ; `AssetRow`. **Overview page** : 2 camemberts (`ui/Donut` SVG interactif) Actifs + Passifs, **survol bidirectionnel** donut↔légende (grossit + s'illumine), **palette catégorielle** `--cat-1..5` (hues distincts). **Onglets** Tout/Immobilier/Épargne/Autres/**Passifs** pilotant les 2 sections. **Perf par actif clarifiée** : badge % à côté du nom, meta = croissance €/revenu €/charges €, chiffre à droite = **gain total/an €** (cohérent avec le %). Build + 129 tests verts. **Reste :** lien visuel actif↔emprunt, purge styles inline ; puis **Flux**, **Projection**. |
 | 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
-| 7 — Graphes (SVG poli) | ⬜ | — |
+| 7 — Graphes (SVG poli) | ✅ | **Palette catégorielle validée (CVD ΔE 13,4) + unifiée** (`--cat-1..5`, `SERIES_COLORS` alignées) via `validate_palette.js`. **Composition** : Épargne passée en or (levait 2 verts trop proches). **Tooltips unifiés** : les 3 graphes partageaient déjà `.chart-tip*` ; ajout pastille d'identité + texte en encre (série / P90-P10), plus de texte coloré. **Transitions d'entrée** : path-draw des courbes + fondu des aires (NetWorth, Compare). **Responsive** : `min-width` + `overflow-x` sur `.chart-wrap`/`.sankey-wrap`, légende `flex-wrap`. Sankey relu (couleurs sémantiques cohérentes). |
 | 8 — Responsive · a11y · print | ⬜ | — |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
@@ -654,6 +655,15 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Phase 7 · Graphes (SVG poli).** Palette `--cat-1..5` reréglée et **validée**
+  (skill dataviz `validate_palette.js` : CVD pire paire ΔE 13,4 ≥ 12, chroma + contraste OK ;
+  lightness hors bande = choix marque documenté) ; `SERIES_COLORS` (comparaison de plans)
+  alignées sur `--cat-*`. Composition : Épargne en or (`--brass`) pour séparer des Actifs
+  (sage) — 2 verts trop proches. Tooltips : déjà classes `.chart-tip*` communes ; ajout
+  `.tip-dot` (pastille) + texte en encre pour série/P90/P10 (skill : identité par la couleur
+  d'une pastille, pas du texte). Transitions d'entrée : `motion.path` path-draw des courbes +
+  fondu des aires/bandes (NetWorth, Compare). Responsive : `.chart-svg { min-width: 520px }` +
+  `.chart-wrap`/`.sankey-wrap { overflow-x: auto }` + légende `flex-wrap`. Build + 130 verts.
 - **2026-07-21 — Phase 5 · Patrimoine.** Familles d'actifs + liste groupée + sous-totaux
   (valeur/net/badge de rentabilité agrégée) ; tri Valeur/Rendement/Nom ; `AssetRow`. Overview
   page : 2 camemberts `ui/Donut` (SVG interactif, contrôlé via `activeIndex`) Actifs/Passifs,
