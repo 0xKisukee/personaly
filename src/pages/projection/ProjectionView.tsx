@@ -79,7 +79,8 @@ export default function ProjectionView({
             <span className="assum-unit">€</span>
           </div>
         </div>
-        <div className="assum-toggles">
+        <div className="assum-toggles" title="Réglages communs à tous les plans">
+          <span className="eyebrow assum-toggles-note">Communs à tous les plans</span>
           <label className="auto-toggle">
             <input type="checkbox" checked={p.indexIncomes} onChange={(e) => setP({ indexIncomes: e.target.checked })} />
             Indexer les revenus

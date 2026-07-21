@@ -119,6 +119,17 @@ describe("loadState", () => {
     expect(loadState().settings.horizon).toBe(40);
   });
 
+  it("indexation & euros constants deviennent globaux : hissés depuis le plan actif", () => {
+    write({
+      plans: [{ id: "p1", name: "P", projection: { indexIncomes: false, indexExpenses: false, realTerms: true } }],
+      activePlanId: "p1",
+    });
+    const s = loadState();
+    expect(s.settings.indexIncomes).toBe(false);
+    expect(s.settings.indexExpenses).toBe(false);
+    expect(s.settings.realTerms).toBe(true);
+  });
+
   it("jalons GLOBAUX : les jalons des plans sont hissés à la racine (fusion + dédup par id)", () => {
     write({
       plans: [

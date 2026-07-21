@@ -386,10 +386,18 @@ export interface AppSettings {
    *  préférence de vue, pas une hypothèse de scénario (les plans se comparent
    *  sur le même horizon). */
   horizon: number;
+  /** Conventions d'affichage/indexation — PARTAGÉES par tous les plans (mêmes
+   *  règles pour comparer les scénarios sur la même base). */
+  indexIncomes: boolean; // les revenus complémentaires suivent l'inflation
+  indexExpenses: boolean; // les dépenses suivent l'inflation
+  realTerms: boolean; // montants affichés en euros constants (pouvoir d'achat)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   horizon: DEFAULT_PROJECTION.horizon,
+  indexIncomes: DEFAULT_PROJECTION.indexIncomes,
+  indexExpenses: DEFAULT_PROJECTION.indexExpenses,
+  realTerms: DEFAULT_PROJECTION.realTerms,
 };
 
 export interface AppState {

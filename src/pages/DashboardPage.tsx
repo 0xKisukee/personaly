@@ -53,7 +53,13 @@ export default function DashboardPage() {
   const planPreviews = useMemo(() => {
     if (!hasData) return [];
     return state.plans.map((pl) => {
-      const { points, events } = project(simInput(state, pl), { ...pl.projection, horizon: previewHorizon });
+      const { points, events } = project(simInput(state, pl), {
+        ...pl.projection,
+        horizon: previewHorizon,
+        indexIncomes: state.settings.indexIncomes,
+        indexExpenses: state.settings.indexExpenses,
+        realTerms: state.settings.realTerms,
+      });
       return { plan: pl, points, events };
     });
   }, [state, hasData, previewHorizon]);

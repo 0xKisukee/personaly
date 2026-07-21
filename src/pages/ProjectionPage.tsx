@@ -38,11 +38,18 @@ const VIEWS: { id: ViewId; label: string }[] = [
  */
 export default function ProjectionPage() {
   const { state, plan, update, updatePlan } = useStore();
-  // horizon PARTAGÉ (settings) : identique quel que soit le plan actif ; le reste
-  // des hypothèses (inflation, rendement…) reste propre à chaque plan.
+  // hypothèses PARTAGÉES (settings) : horizon + conventions d'indexation / euros
+  // constants sont identiques quel que soit le plan actif (mêmes règles pour comparer).
+  // Le reste (inflation, rendement, cascades…) reste propre à chaque plan.
   const p = useMemo(
-    () => ({ ...plan.projection, horizon: state.settings.horizon }),
-    [plan.projection, state.settings.horizon]
+    () => ({
+      ...plan.projection,
+      horizon: state.settings.horizon,
+      indexIncomes: state.settings.indexIncomes,
+      indexExpenses: state.settings.indexExpenses,
+      realTerms: state.settings.realTerms,
+    }),
+    [plan.projection, state.settings]
   );
   const setHorizon = (horizon: number) =>
     update((s) => ({ ...s, settings: { ...s.settings, horizon } }));
@@ -54,8 +61,16 @@ export default function ProjectionPage() {
   const [chartMode, setChartMode] = useState<"net" | "composition" | "plans">("net");
   const [selYear, setSelYear] = useState<number | null>(null);
   const [evDraft, setEvDraft] = useState<PlannedEvent | null>(null);
-  const setP = (patch: Partial<ProjectionParams>) =>
-    updatePlan((pl) => ({ ...pl, projection: { ...pl.projection, ...patch } }));
+  // hypothèses GLOBALES (partagées entre plans) vs propres au plan : `setP` répartit
+  // le patch entre `settings` et `plan.projection` selon la clé.
+  const GLOBAL_KEYS = ["horizon", "indexIncomes", "indexExpenses", "realTerms"] as const;
+  const setP = (patch: Partial<ProjectionParams>) => {
+    const entries = Object.entries(patch);
+    const globalPatch = Object.fromEntries(entries.filter(([k]) => (GLOBAL_KEYS as readonly string[]).includes(k)));
+    const planPatch = Object.fromEntries(entries.filter(([k]) => !(GLOBAL_KEYS as readonly string[]).includes(k)));
+    if (Object.keys(globalPatch).length) update((s) => ({ ...s, settings: { ...s.settings, ...globalPatch } }));
+    if (Object.keys(planPatch).length) updatePlan((pl) => ({ ...pl, projection: { ...pl.projection, ...planPatch } }));
+  };
 
   // finances courantes + couche du plan = entrée du moteur
   const projState = useMemo(() => simInput(state, plan), [state, plan]);
@@ -75,14 +90,20 @@ export default function ProjectionPage() {
   }), [state.assets, state.liabilities, plan, milestones]);
 
   // mode Plans : une courbe par PLAN, chacun avec ses jalons/événements/hypothèses
-  // (horizon et euros constants alignés sur le plan actif pour partager l'axe)
+  // propres, mais horizon + indexation + euros constants PARTAGÉS (mêmes règles/axe)
   const planSeries = useMemo(() => {
     if (view !== "proj" || chartMode !== "plans") return null;
     return state.plans.map((pl) => ({
       name: pl.name,
-      points: project(simInput(state, pl), { ...pl.projection, horizon: p.horizon, realTerms: p.realTerms }).points,
+      points: project(simInput(state, pl), {
+        ...pl.projection,
+        horizon: p.horizon,
+        indexIncomes: p.indexIncomes,
+        indexExpenses: p.indexExpenses,
+        realTerms: p.realTerms,
+      }).points,
     }));
-  }, [view, chartMode, state, p.horizon, p.realTerms]);
+  }, [view, chartMode, state, p.horizon, p.indexIncomes, p.indexExpenses, p.realTerms]);
 
   const hasData =
     grossWealth(state) > 0 || totalLiabilities(state) > 0 || state.incomes.length > 0 ||

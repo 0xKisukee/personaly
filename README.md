@@ -93,7 +93,7 @@ Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `S
 ```ts
 AppState = {
   profile:   { firstName, birthDate }
-  settings:  { horizon }                     // GLOBAL (voir « horizon global » plus bas)
+  settings:  { horizon, indexIncomes, indexExpenses, realTerms }  // GLOBAUX, partagés par tous les plans
   milestones: Milestone[]                    // JALONS GLOBAUX (voir « Jalons » plus bas)
   assets, liabilities, incomes, expenses     // FINANCES COURANTES
   plans: Plan[], activePlanId                // SIMULATIONS
@@ -233,9 +233,13 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par
   (jusqu'à 60/80/100/120 ans selon la tranche : <40→60, 40–60→80, 60–80→100, >80→120),
   **indépendant** de `settings.horizon` (la timeframe de Projection) — défaut 40 ans si la date
   de naissance est absente.
-- **Horizon GLOBAL** : l'horizon de projection vit dans `settings.horizon` (préférence de vue
-  partagée par tous les plans), fusionné à l'appel du moteur (`{...plan.projection, horizon:
-  settings.horizon}`). Le reste des hypothèses reste propre à chaque plan.
+- **Réglages GLOBAUX** : `settings` porte les préférences partagées par tous les plans —
+  `horizon` (fenêtre de projection) **et** les conventions d'indexation/affichage `indexIncomes`,
+  `indexExpenses`, `realTerms` (euros constants). Fusionnés à l'appel du moteur
+  (`{...plan.projection, ...clés de settings}`) ; `setP` reroute ces clés vers `settings` plutôt que
+  vers le plan. Le reste des hypothèses (inflation, rendement, cascades…) reste **propre à chaque
+  plan**. Migration : les valeurs sont hissées depuis le plan actif si `settings` ne les portait
+  pas encore (continuité).
 
 ---
 

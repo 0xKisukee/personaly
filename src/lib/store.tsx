@@ -125,7 +125,13 @@ export function migrateState(input: unknown): AppState {
     return {
       ...EMPTY_STATE,
       profile: parsed.profile ?? EMPTY_STATE.profile,
-      settings: { ...DEFAULT_SETTINGS, horizon: plan.projection.horizon ?? DEFAULT_SETTINGS.horizon },
+      settings: {
+        ...DEFAULT_SETTINGS,
+        horizon: plan.projection.horizon ?? DEFAULT_SETTINGS.horizon,
+        indexIncomes: plan.projection.indexIncomes ?? DEFAULT_SETTINGS.indexIncomes,
+        indexExpenses: plan.projection.indexExpenses ?? DEFAULT_SETTINGS.indexExpenses,
+        realTerms: plan.projection.realTerms ?? DEFAULT_SETTINGS.realTerms,
+      },
       milestones: Array.isArray(parsed.milestones) ? parsed.milestones : [],
       assets: normalizeAssets(parsed.assets),
       liabilities: normalizeLiabilities(parsed.liabilities),
@@ -159,6 +165,9 @@ export function migrateState(input: unknown): AppState {
     ...DEFAULT_SETTINGS,
     ...(parsed.settings ?? {}),
     horizon: parsed.settings?.horizon ?? activePlan.projection.horizon ?? DEFAULT_SETTINGS.horizon,
+    indexIncomes: parsed.settings?.indexIncomes ?? activePlan.projection.indexIncomes ?? DEFAULT_SETTINGS.indexIncomes,
+    indexExpenses: parsed.settings?.indexExpenses ?? activePlan.projection.indexExpenses ?? DEFAULT_SETTINGS.indexExpenses,
+    realTerms: parsed.settings?.realTerms ?? activePlan.projection.realTerms ?? DEFAULT_SETTINGS.realTerms,
   };
   const { milestones, plans: finalPlans } = hoistMilestones(parsed.milestones, plans);
   return {
