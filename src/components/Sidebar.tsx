@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { serializeState, useStore } from "../lib/store";
+import { DEFAULT_PLAN, type Plan } from "../lib/types";
 import { netWealth } from "../lib/selectors";
 import { ageFrom, money, uid } from "../lib/format";
 import { ROUTES } from "../routes";
@@ -26,17 +27,12 @@ export default function Sidebar() {
     if (!onProjection) navigate("/projection");
   };
 
-  // nouveau plan = DUPLICATION du plan actif (jalons copiés avec les mêmes ids :
-  // les ancrages des flux se résolvent aussi dans le nouveau plan)
+  // nouveau plan = plan VIDE (hypothèses par défaut, ni jalons ni événements).
+  // Pour repartir d'un plan existant, utiliser « Dupliquer » sur la page Projection.
   const addPlan = () => {
     update((s) => {
-      const src = s.plans.find((pl) => pl.id === s.activePlanId) ?? s.plans[0];
-      const copy = {
-        ...structuredClone(src),
-        id: uid(),
-        name: `Plan ${s.plans.length + 1}`,
-      };
-      return { ...s, plans: [...s.plans, copy], activePlanId: copy.id };
+      const plan: Plan = { ...structuredClone(DEFAULT_PLAN), id: uid(), name: `Plan ${s.plans.length + 1}` };
+      return { ...s, plans: [...s.plans, plan], activePlanId: plan.id };
     });
     if (!onProjection) navigate("/projection");
   };

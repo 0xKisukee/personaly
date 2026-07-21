@@ -380,8 +380,6 @@ export const DEFAULT_PLAN: Plan = {
  */
 /** Réglages globaux du site (édités dans le panneau Paramètres). */
 export interface AppSettings {
-  /** Inflation par défaut (%/an) — sert de base à la trajectoire de l'Accueil. */
-  defaultInflation: number;
   /** Horizon de projection (années) — PARTAGÉ par tous les plans : c'est une
    *  préférence de vue, pas une hypothèse de scénario (les plans se comparent
    *  sur le même horizon). */
@@ -389,7 +387,6 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  defaultInflation: DEFAULT_PROJECTION.inflation,
   horizon: DEFAULT_PROJECTION.horizon,
 };
 

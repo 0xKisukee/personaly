@@ -55,7 +55,7 @@ src/
 ├── components/         # composants transverses
 │   ├── Modal.tsx       # modale générique : PORTAIL vers <body>, focus-trap, verrou de scroll, Escape
 │   ├── Sidebar.tsx     # nav (00→03) + liste des PLANS + patrimoine net + accès Paramètres
-│   ├── SettingsModal.tsx  # Paramètres : nom, date de naissance, inflation par défaut
+│   ├── SettingsModal.tsx  # Paramètres : nom, date de naissance
 │   ├── PageHeader WhenPicker MilestonesEditor SankeyChart icons
 └── pages/
     ├── DashboardPage.tsx   # 00 — Accueil (vue d'ensemble)
@@ -79,7 +79,8 @@ src/
   Une simulation ne les modifie **jamais**.
 - **Plans** (`state.plans[]`, actif = `activePlanId`) = des couches **hypothétiques**
   posées dessus : chacune a **ses** jalons, **ses** événements, **ses** hypothèses. Sélection /
-  création dans la sidebar (« Nouveau plan » = duplication du plan actif).
+  création dans la sidebar (« Nouveau plan » = **plan vide**, hypothèses par défaut) ;
+  « Dupliquer » (page Projection) = **copie** du plan actif (jalons/événements/hypothèses).
 
 Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `SimState` via
 `simInput(state, plan)`.
@@ -91,7 +92,7 @@ Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `S
 ```ts
 AppState = {
   profile:   { firstName, birthDate }
-  settings:  { defaultInflation, horizon }   // GLOBAUX (voir « horizon global » plus bas)
+  settings:  { horizon }                     // GLOBAL (voir « horizon global » plus bas)
   assets, liabilities, incomes, expenses     // FINANCES COURANTES
   plans: Plan[], activePlanId                // SIMULATIONS
 }
