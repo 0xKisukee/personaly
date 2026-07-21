@@ -36,6 +36,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import WhenPicker from "../components/WhenPicker";
+import { Segment, Select } from "../ui";
 import {
   IconArrowUp,
   IconBox,
@@ -100,13 +101,14 @@ function Bounds({ item, milestones }: {
   const { start, end } = flowBounds(item, milestones);
   const active = isActiveYear(start, end, CURRENT_YEAR);
   const txt = [sTxt ? `dès ${sTxt}` : "", eTxt ? `→ ${eTxt}` : ""].filter(Boolean).join(" ");
-  return <span className="tag" style={{ color: active ? "var(--ink-mute)" : "var(--drain)" }}>{active ? txt : `${txt} · inactif`}</span>;
+  return <span className={"tag " + (active ? "txt-mute" : "txt-drain")}>{active ? txt : `${txt} · inactif`}</span>;
 }
 
 export default function FluxPage() {
   // `plan` : uniquement pour résoudre les ancrages jalon des flux (jalons du plan actif)
   const { state, plan, update } = useStore();
   const [view, setView] = useState<Period>("yearly");
+  const [tab, setTab] = useState<"all" | "in" | "out">("all");
   const [incomeDraft, setIncomeDraft] = useState<IncomeItem | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseItem | null>(null);
 
@@ -170,10 +172,15 @@ export default function FluxPage() {
         }
         lede="Tout ce qui fait varier ton patrimoine net. On distingue ce qui est réellement encaissé ou décaissé de la plus-value latente (la valeur monte sans rien te verser)."
         actions={
-          <div className="segment">
-            <button data-on={view === "yearly"} onClick={() => setView("yearly")}>Annuel</button>
-            <button data-on={view === "monthly"} onClick={() => setView("monthly")}>Mensuel</button>
-          </div>
+          <Segment
+            aria-label="Période d'affichage"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "yearly", label: "Annuel" },
+              { value: "monthly", label: "Mensuel" },
+            ]}
+          />
         }
       />
 
@@ -226,13 +233,28 @@ export default function FluxPage() {
         </div>
       </motion.div>
 
+      {/* onglets : filtrent l'affichage entrants / sortants */}
+      <div className="fam-tabs">
+        <Segment
+          aria-label="Filtrer les flux"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "all", label: "Tout" },
+            { value: "in", label: "Entrants" },
+            { value: "out", label: "Sortants" },
+          ]}
+        />
+      </div>
+
       {/* ===================== ENTRANTS ===================== */}
+      {tab !== "out" && (
       <section className="section">
         <div className="section-head">
           <span className="dot gain" />
           <h2>Flux entrants</h2>
           <span className="spacer" />
-          <span className="tag" style={{ color: "var(--gain)", borderColor: "var(--line-brass)" }}>
+          <span className="tag tag-brass txt-gain">
             {money(disp(inflow))} {per}
           </span>
         </div>
@@ -251,7 +273,7 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {patrimoineIncomes.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
-                <div className="row-ic" style={{ color: "var(--gain)" }}><IconArrowUp size={20} /></div>
+                <div className="row-ic txt-gain"><IconArrowUp size={20} /></div>
                 <div className="row-main">
                   <div className="row-title">{asset.label}</div>
                   <div className="row-meta">
@@ -259,7 +281,7 @@ export default function FluxPage() {
                     {asset.incomeMode === "rate" && <span>rendement distribué</span>}
                   </div>
                 </div>
-                <div className="row-val" style={{ color: "var(--gain)" }}>{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
+                <div className="row-val txt-gain">{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
                 <div />
               </div>
             ))}
@@ -284,13 +306,13 @@ export default function FluxPage() {
               const b = flowBounds(it, plan.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
-                  <div className="row-ic" style={{ color: "var(--gain)" }}><Meta.icon size={20} /></div>
+                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
+                  <div className="row-ic txt-gain"><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
                     <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
                   </div>
-                  <div className="row-val" style={{ color: "var(--gain)" }}>{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
+                  <div className="row-val txt-gain">{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
                     <button className="icon-btn" onClick={() => setIncomeDraft({ ...it })} aria-label="Modifier"><IconEdit size={16} /></button>
                     <button className="icon-btn danger" onClick={() => delIncome(it.id)} aria-label="Supprimer"><IconTrash size={16} /></button>
@@ -315,7 +337,7 @@ export default function FluxPage() {
           <div className="rows">
             {appreciationRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
-                <div className="row-ic" style={{ color: "var(--sage)" }}><IconChart size={20} /></div>
+                <div className="row-ic txt-sage"><IconChart size={20} /></div>
                 <div className="row-main">
                   <div className="row-title">{asset.label}</div>
                   <div className="row-meta">
@@ -323,21 +345,23 @@ export default function FluxPage() {
                     <span>valeur +{asset.growthRate} %/an · plus-value non encaissée</span>
                   </div>
                 </div>
-                <div className="row-val" style={{ color: "var(--sage)" }}>{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
+                <div className="row-val txt-sage">{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
                 <div />
               </div>
             ))}
           </div>
         )}
       </section>
+      )}
 
       {/* ===================== SORTANTS ===================== */}
+      {tab !== "in" && (
       <section className="section">
         <div className="section-head">
           <span className="dot drain" />
           <h2>Flux sortants</h2>
           <span className="spacer" />
-          <span className="tag" style={{ color: "var(--drain)" }}>−{money(disp(outflow))} {per}</span>
+          <span className="tag txt-drain">−{money(disp(outflow))} {per}</span>
         </div>
 
         {/* dépenses & impôts (manuels, liquide) */}
@@ -358,13 +382,13 @@ export default function FluxPage() {
               const b = flowBounds(it, plan.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} style={{ opacity: active ? 1 : 0.5 }} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
-                  <div className="row-ic" style={{ color: it.category === "impot" ? "var(--brass)" : "var(--drain)" }}><Meta.icon size={20} /></div>
+                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
+                  <div className={"row-ic " + (it.category === "impot" ? "txt-brass" : "txt-drain")}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
                     <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={plan.milestones} /></div>
                   </div>
-                  <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
+                  <div className="row-val txt-drain">−{money(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
                     <button className="icon-btn" onClick={() => setExpenseDraft({ ...it })} aria-label="Modifier"><IconEdit size={16} /></button>
                     <button className="icon-btn danger" onClick={() => delExpense(it.id)} aria-label="Supprimer"><IconTrash size={16} /></button>
@@ -387,12 +411,12 @@ export default function FluxPage() {
           <div className="rows" style={{ marginBottom: 18 }}>
             {chargeRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
-                <div className="row-ic" style={{ color: "var(--drain)" }}><IconHome size={20} /></div>
+                <div className="row-ic txt-drain"><IconHome size={20} /></div>
                 <div className="row-main">
                   <div className="row-title">{asset.label}</div>
                   <div className="row-meta"><span className="tag">depuis Patrimoine</span><span>charges de détention</span></div>
                 </div>
-                <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(yearly))}<div className="flux zero">{per}</div></div>
+                <div className="row-val txt-drain">−{money(disp(yearly))}<div className="flux zero">{per}</div></div>
                 <div />
               </div>
             ))}
@@ -414,17 +438,17 @@ export default function FluxPage() {
                 const insY = (l.insurance || 0) * 12;
                 return (
                   <div className="row" key={l.id}>
-                    <div className="row-ic" style={{ color: "var(--drain)" }}><IconDebt size={20} /></div>
+                    <div className="row-ic txt-drain"><IconDebt size={20} /></div>
                     <div className="row-main">
                       <div className="row-title">{l.label}</div>
                       <div className="row-meta">
                         <span className="tag">depuis Patrimoine</span>
                         <span>mensualité {money(l.monthlyPayment || 0)}/mois</span>
-                        · <span style={{ color: "var(--sage)" }}>dont capital {money(disp(split.principal))} {per} reconstitué</span>
+                        · <span className="txt-sage">dont capital {money(disp(split.principal))} {per} reconstitué</span>
                         {insY > 0 && <>· <span>assurance {money(disp(insY))} {per}</span></>}
                       </div>
                     </div>
-                    <div className="row-val" style={{ color: "var(--drain)" }}>−{money(disp(split.interest + insY))}<div className="flux zero">intérêts{insY > 0 ? " + assur." : ""} {per}</div></div>
+                    <div className="row-val txt-drain">−{money(disp(split.interest + insY))}<div className="flux zero">intérêts{insY > 0 ? " + assur." : ""} {per}</div></div>
                     <div />
                   </div>
                 );
@@ -449,7 +473,7 @@ export default function FluxPage() {
           <div className="rows">
             {depreciationRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
-                <div className="row-ic" style={{ color: "var(--drain)" }}><IconChart size={20} /></div>
+                <div className="row-ic txt-drain"><IconChart size={20} /></div>
                 <div className="row-main">
                   <div className="row-title">{asset.label}</div>
                   <div className="row-meta">
@@ -457,13 +481,14 @@ export default function FluxPage() {
                     <span>valeur {asset.growthRate} %/an · perte de valeur non décaissée</span>
                   </div>
                 </div>
-                <div className="row-val" style={{ color: "var(--drain)" }}>{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
+                <div className="row-val txt-drain">{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
                 <div />
               </div>
             ))}
           </div>
         )}
       </section>
+      )}
 
       {incomeDraft && (
         <FlowModal
@@ -553,11 +578,11 @@ function FlowModal({
         </div>
         <div className="field">
           <label>Catégorie</label>
-          <select className="select" value={draft.category} onChange={(e) => set({ category: e.target.value })}>
+          <Select value={draft.category} onChange={(e) => set({ category: e.target.value })}>
             {Object.entries(categories).map(([k, v]) => (
               <option key={k} value={k}>{v.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="field">
           <label>Montant (€)</label>
@@ -570,10 +595,14 @@ function FlowModal({
         </div>
         <div className="field span-2">
           <label>Périodicité</label>
-          <div className="segment">
-            <button data-on={draft.period === "monthly"} onClick={() => set({ period: "monthly" })}>Mensuel</button>
-            <button data-on={draft.period === "yearly"} onClick={() => set({ period: "yearly" })}>Annuel</button>
-          </div>
+          <Segment
+            value={draft.period}
+            onChange={(period) => set({ period })}
+            options={[
+              { value: "monthly", label: "Mensuel" },
+              { value: "yearly", label: "Annuel" },
+            ]}
+          />
         </div>
         <div className="field span-2">
           <label>À partir de</label>

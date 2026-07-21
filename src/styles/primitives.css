@@ -56,6 +56,15 @@
 .txt-drain {
   color: var(--drain);
 }
+.txt-sage {
+  color: var(--sage);
+}
+.txt-brass {
+  color: var(--brass);
+}
+.txt-mute {
+  color: var(--ink-mute);
+}
 .tag-brass {
   border-color: var(--line-brass);
 }

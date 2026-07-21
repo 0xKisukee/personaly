@@ -866,29 +866,29 @@
 .flux-sub {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 6px 0 12px;
+  gap: 11px;
+  margin: 24px 0 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line); /* sépare l'en-tête de sous-groupe de ses lignes */
 }
 .flux-sub-label {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--ink-soft);
 }
 .flux-sub-label::before {
   content: "› ";
   color: var(--brass);
 }
 .flux-sub-total {
-  font-size: 13px;
-  color: var(--ink-soft);
+  margin-left: auto; /* total toujours aligné à droite (cohérent entre sous-groupes) */
+  font-size: 13.5px;
+  color: var(--ink);
 }
 .flux-sub .btn {
-  margin-left: auto;
-}
-.flux-sub-total + .btn {
-  margin-left: auto;
+  margin-left: 12px;
 }
 
 /* tag encaissé / latent */
