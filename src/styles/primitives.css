@@ -65,6 +65,15 @@
 .txt-mute {
   color: var(--ink-mute);
 }
+.txt-faint {
+  color: var(--ink-faint);
+}
+.txt-soft {
+  color: var(--ink-soft);
+}
+.txt-brass-bright {
+  color: var(--brass-bright);
+}
 .tag-brass {
   border-color: var(--line-brass);
 }

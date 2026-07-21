@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import type { Asset, Milestone, ProjectionParams } from "../../lib/types";
 import type { ProjectionEvent, YearPoint } from "../../lib/projection";
 import { money, signedMoney, percent } from "../../lib/format";
+import { Segment } from "../../ui";
 import CascadeEditor from "./CascadeEditor";
 import NetWorthChart from "./NetWorthChart";
 import CompareChart from "./CompareChart";
@@ -39,6 +40,12 @@ export default function ProjectionView({
   const mult = now.netWorth > 0 ? end.netWorth / now.netWorth : null;
   const cagr = now.netWorth > 0 && end.netWorth > 0 ? (Math.pow(end.netWorth / now.netWorth, 1 / p.horizon) - 1) * 100 : null;
   const fiPoint = fiYearIndex !== null ? points[fiYearIndex] : null;
+
+  const chartModes: { value: ChartMode; label: string }[] = [
+    { value: "net", label: "Patrimoine net" },
+    { value: "composition", label: "Composition" },
+    ...(plansCount > 1 ? [{ value: "plans", label: "Plans" } as { value: ChartMode; label: string }] : []),
+  ];
 
   return (
     <>
@@ -136,8 +143,8 @@ export default function ProjectionView({
         </div>
       )}
       {!fiPoint && p.fiTarget != null && p.fiTarget > 0 && (
-        <div className="fi-banner" style={{ borderColor: "rgba(213,152,115,0.4)", background: "rgba(213,152,115,0.07)" }}>
-          <span className="fi-dot" style={{ background: "var(--drain)", boxShadow: "0 0 10px var(--drain)" }} />
+        <div className="fi-banner warn">
+          <span className="fi-dot" />
           <b>Indépendance financière</b> ({money(p.fiTarget)}) non atteinte sur l'horizon —
           il manque <b>{money(Math.max(0, p.fiTarget - end.netWorth))}</b> en {end.year}.
         </div>
@@ -145,13 +152,8 @@ export default function ProjectionView({
 
       <motion.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
         <div className="chart-head">
-          <div className="segment">
-            <button data-on={chartMode === "net"} onClick={() => setChartMode("net")}>Patrimoine net</button>
-            <button data-on={chartMode === "composition"} onClick={() => setChartMode("composition")}>Composition</button>
-            {plansCount > 1 && (
-              <button data-on={chartMode === "plans"} onClick={() => setChartMode("plans")}>Plans</button>
-            )}
-          </div>
+          <Segment aria-label="Mode du graphe" value={chartMode} onChange={setChartMode} options={chartModes} />
+
           {chartMode === "composition" && (
             <div className="chart-legend">
               <span><i style={{ background: "var(--sage)" }} /> Actifs</span>
@@ -169,16 +171,16 @@ export default function ProjectionView({
           {chartMode !== "plans" && (
             <div className="chart-legend mark-legend">
               {events.some((e) => e.kind === "planned") && (
-                <span><b style={{ color: "var(--brass-bright)" }}>⚑</b> événement — clique pour éditer</span>
+                <span><b className="txt-brass-bright">⚑</b> événement — clique pour éditer</span>
               )}
               {events.some((e) => e.kind === "loan") && (
-                <span><b style={{ color: "var(--sage)" }}>✓</b> fin d'emprunt</span>
+                <span><b className="txt-sage">✓</b> fin d'emprunt</span>
               )}
               {events.some((e) => e.kind === "fi") && (
-                <span><b style={{ color: "var(--gain)" }}>◆</b> indépendance financière</span>
+                <span><b className="txt-gain">◆</b> indépendance financière</span>
               )}
               {milestones.length > 0 && (
-                <span><b style={{ color: "var(--sage)" }}>◇</b> jalon</span>
+                <span><b className="txt-sage">◇</b> jalon</span>
               )}
             </div>
           )}
@@ -220,11 +222,11 @@ export default function ProjectionView({
                   className="proj-row" onClick={() => onSelectYear(pt.year)}>
                   <td>{pt.year}{pt.age !== null && <span className="proj-age"> · {pt.age} ans</span>}</td>
                   <td className="r mono">{money(pt.grossAssets)}</td>
-                  <td className="r mono" style={{ color: pt.debt > 0 ? "var(--drain)" : "var(--ink-faint)" }}>
+                  <td className={"r mono " + (pt.debt > 0 ? "txt-drain" : "txt-faint")}>
                     {pt.debt > 0 ? "−" + money(pt.debt) : "—"}
                   </td>
-                  <td className="r mono" style={{ color: pt.savings < 0 ? "var(--drain)" : "var(--ink-soft)" }}>{signedMoney(pt.savings)}</td>
-                  <td className="r mono" style={{ fontWeight: 600, color: "var(--brass-bright)" }}>{money(pt.netWorth)}</td>
+                  <td className={"r mono " + (pt.savings < 0 ? "txt-drain" : "txt-soft")}>{signedMoney(pt.savings)}</td>
+                  <td className="r mono proj-net">{money(pt.netWorth)}</td>
                 </tr>
               ))}
             </tbody>

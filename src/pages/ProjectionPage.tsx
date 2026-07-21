@@ -9,6 +9,7 @@ import { canReceiveDeposits } from "../lib/types";
 import { grossWealth, totalLiabilities } from "../lib/selectors";
 import { uid } from "../lib/format";
 import PageHeader from "../components/PageHeader";
+import { Segment } from "../ui";
 import { IconChart } from "../components/icons";
 import type { AppStateLike } from "./projection/eventHelpers";
 import { emptyEvent } from "./projection/eventHelpers";
@@ -119,11 +120,12 @@ export default function ProjectionPage() {
         title={<>Ton patrimoine <em>demain</em></>}
         lede="Simulation année par année : les emprunts s'éteignent à leur terme, la valeur des actifs se compose et l'épargne est réinvestie."
         actions={
-          <div className="segment">
-            {HORIZONS.map((h) => (
-              <button key={h} data-on={p.horizon === h} onClick={() => setP({ horizon: h })}>{h} ans</button>
-            ))}
-          </div>
+          <Segment
+            aria-label="Horizon de projection"
+            value={p.horizon}
+            onChange={(horizon) => setP({ horizon })}
+            options={HORIZONS.map((h) => ({ value: h, label: `${h} ans` }))}
+          />
         }
       />
 
@@ -145,23 +147,30 @@ export default function ProjectionPage() {
             />
             <button className="btn btn-ghost" onClick={duplicatePlan}>Dupliquer</button>
             {state.plans.length > 1 && (
-              <button className="btn btn-ghost" style={{ color: "var(--drain)" }} onClick={deletePlan}>Supprimer</button>
+              <button className="btn btn-ghost txt-drain" onClick={deletePlan}>Supprimer</button>
             )}
             <span className="spacer" />
-            <div className="segment view-tabs">
-              {VIEWS.map((v) => (
-                <button key={v.id} data-on={view === v.id} onClick={() => setView(v.id)}>
-                  {v.label}
-                  {v.id === "events" && plan.events.length > 0 && <span className="view-count">{plan.events.length}</span>}
-                </button>
-              ))}
-            </div>
+            <Segment
+              className="view-tabs"
+              aria-label="Vue de projection"
+              value={view}
+              onChange={setView}
+              options={VIEWS.map((v) => ({
+                value: v.id,
+                label:
+                  v.id === "events" && plan.events.length > 0 ? (
+                    <>{v.label} <span className="view-count">{plan.events.length}</span></>
+                  ) : (
+                    v.label
+                  ),
+              }))}
+            />
           </div>
 
           {/* --------- alertes moteur (épargne négative, jalon supprimé…) --------- */}
           {warnings.slice(0, 3).map((w, i) => (
-            <div key={i} className="fi-banner" style={{ borderColor: "rgba(213,152,115,0.4)", background: "rgba(213,152,115,0.07)" }}>
-              <span className="fi-dot" style={{ background: "var(--drain)", boxShadow: "0 0 10px var(--drain)" }} />
+            <div key={i} className="fi-banner warn">
+              <span className="fi-dot" />
               {w.label}
             </div>
           ))}

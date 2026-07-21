@@ -157,8 +157,24 @@
   box-shadow: 0 0 10px var(--gain);
   flex-shrink: 0;
 }
+/* variante alerte (drain) : FI non atteinte, avertissements moteur */
+.fi-banner.warn {
+  border-color: rgba(213, 152, 115, 0.4);
+  background: rgba(213, 152, 115, 0.07);
+}
+.fi-banner.warn b {
+  color: var(--drain);
+}
+.fi-banner.warn .fi-dot {
+  background: var(--drain);
+  box-shadow: 0 0 10px var(--drain);
+}
 .proj-table tr[data-fi="true"] td {
   box-shadow: inset 3px 0 0 var(--gain);
+}
+.proj-table td.proj-net {
+  font-weight: 600;
+  color: var(--brass-bright);
 }
 
 .chart-head {
