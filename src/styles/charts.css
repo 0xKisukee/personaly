@@ -219,7 +219,7 @@
 .chart-axis {
   font-family: var(--font-mono);
   font-size: 11px;
-  fill: var(--ink-faint);
+  fill: var(--ink-mute); /* labels de données : lisibilité AA (était --ink-faint) */
 }
 .chart-tip {
   position: absolute;
@@ -474,8 +474,28 @@
   color: var(--brass-bright);
 }
 @media (max-width: 860px) {
+  /* barre du haut : les plans deviennent des puces horizontales (on garde le switch) */
   .side-plans {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0 0 0 10px;
+    border-top: none;
+    border-left: 1px solid var(--line);
+    flex: none;
+  }
+  .side-plans .eyebrow {
     display: none;
+  }
+  .side-plans .plan-item {
+    width: auto;
+    padding: 7px 11px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .side-plans .plan-name {
+    max-width: 92px;
   }
 }
 
@@ -775,9 +795,35 @@
   .nav-item .nav-soon {
     display: none;
   }
-  .side-foot,
   .brand {
     display: none;
+  }
+  /* barre du haut : on garde l'accès Paramètres (roue), on masque le reste du footer */
+  .side-foot {
+    display: flex;
+    align-items: center;
+    margin: 0 0 0 auto;
+    padding: 0;
+    border: none;
+    background: none;
+    flex: none;
+  }
+  .side-foot .eyebrow,
+  .side-foot .net,
+  .side-foot .side-data,
+  .side-foot .who .who-name {
+    display: none;
+  }
+  .side-foot .who {
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  /* en-têtes qui peuvent déborder sur petit écran → passage à la ligne */
+  .section-head,
+  .plan-bar,
+  .chart-head {
+    flex-wrap: wrap;
   }
   .wealth-hero {
     grid-template-columns: 1fr;

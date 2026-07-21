@@ -128,7 +128,7 @@ function DataControls() {
 
   const exportJSON = () => {
     const today = new Date().toISOString().slice(0, 10);
-    const blob = new Blob([serializeState(state)], { type: "application/json" });
+    const blob = new Blob([serializeState(state)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

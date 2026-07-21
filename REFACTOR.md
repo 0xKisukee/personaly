@@ -337,6 +337,14 @@ Patrimoine → Flux → Projection.
 
 ### Phase 6 — Onboarding + **mode démo complet**
 
+> ⏸️ **DÉLIBÉRÉMENT REPORTÉE — à faire EN DERNIER, quand l'app sera considérée
+> terminée.** Décision (2026-07-21) : inutile de guider l'utilisateur / figer un persona
+> de démo tant que les pages, le modèle et les parcours bougent encore — l'onboarding et la
+> visite guidée pointeraient vers des écrans amenés à changer, et le `lib/demo.ts` serait à
+> refaire. On reprendra cette phase une fois le reste stabilisé (probablement après la Phase 8).
+> Le cadrage détaillé (5 briques, questions ouvertes sur l'ampleur du wizard / le persona / le
+> déclenchement) est à (re)faire à ce moment-là.
+
 **But.** Deux besoins complémentaires :
 - **Onboarding** : guider un nouvel utilisateur (état vide) de zéro à une première projection.
 - **Mode démo complet** : un environnement pré-rempli qui **montre toutes les fonctionnalités**
@@ -598,9 +606,10 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   taux d'épargne, **répartition** des actifs (barres teintées par la perf), **à venir**
   (prochain jalon / événement). État vide → CTA « Commence par ton patrimoine ». Build +
   **127 tests** verts, boot OK.
-- **Prochaine étape :** Phases 5 + 7 **terminées**. Restent : **Phase 6 — Onboarding + mode
-  démo** (sautée pour l'instant) et **Phase 8 — Responsive · a11y · finitions** (dont
-  `prefers-reduced-motion` à câbler pour les transitions de graphes ajoutées en phase 7).
+- **Prochaine étape :** Phases 5 + 7 **terminées**. **Phase 6 (onboarding + démo) reportée
+  DÉLIBÉRÉMENT à la fin** (à faire quand l'app sera considérée terminée — cf. encadré §Phase 6).
+  Reste donc surtout la **Phase 8 — Responsive · a11y · finitions** (dont `prefers-reduced-motion`
+  pour les transitions de graphes de la phase 7), puis Phase 6 en tout dernier.
 - **Branche en cours :** `main`. Committé jusqu'à `9586971 phase 5 - flux 2`. **Projection
   (habillage) en working tree, pas encore committé.** Lien actif↔emprunt **abandonné**.
 
@@ -614,9 +623,9 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
 | 3 — Couleur de performance | ✅ | Métrique `assetPerformance()` {pct, latent/cash pct+€, netEur} ; tokens `--perf-*` divergents 3 paliers (`color-mix` sur `--gain`/`--drain`) ; `ui/PerformanceBadge` (+ `perfColor`) ; liste Patrimoine : barre d'accent + badge (flèche+signe+chiffre, jamais couleur seule) + tri Ordre/Rendement/Valeur. **Sparkline retirée** (inutile sans échelle). **Reste optionnel :** hero patrimoine, table de projection, donut Dashboard → phases 4/5/7. |
 | 4 — Dashboard | ✅ | Route `/` = `DashboardPage` (atterrissage) ; nav « 00 Accueil » (numérotation 0-indexée). Blocs cliquables : hero net/brut/passifs, trajectoire +1/+5/+10 ans (moteur mémoïsé 1 passe), flux mensuels + taux d'épargne, répartition (barres teintées perf), prochain jalon/événement, CTA état vide. **Pas de mini-courbe** (choix : chiffres d'horizon labellisés plutôt qu'un graphe sans échelle — cf. retour Sparkline). |
 | 5 — Refonte pages (Patrimoine → Flux → Projection) | ✅ | **Projection FAIT** (habillage, moteur/4 vues intacts) : header horizons + onglets de vue + mode du graphe → `Segment` ; purge styles inline → utilitaires `.txt-*` + variante `.fi-banner.warn` + `.proj-net`. Légende des glyphes & panneau d'hypothèses (`.assum`) **déjà présents**. **Optionnel restant :** titre sur le panneau hypothèses, relecture modale « détail d'année », styles inline structurels (padding/width) non purgés (non sémantiques). **Flux** (compta inchangée) : purge styles inline → utilitaires `.txt-*`/`.tag-brass` ; toggles + select via `Segment`/`Select` ; hiérarchie sous-groupes (totaux alignés à droite + séparateurs) ; **onglets Tout/Entrants/Sortants**. **Patrimoine** : familles (`ASSET_FAMILIES`/`assetFamily` → Immobilier / Épargne & liquidités / Autres) ; liste **groupée par famille** + sous-totaux (valeur, net/an, **badge de rentabilité agrégée**) ; tri Valeur/Rendement/Nom ; `AssetRow`. **Overview page** : 2 camemberts (`ui/Donut` SVG interactif) Actifs + Passifs, **survol bidirectionnel** donut↔légende (grossit + s'illumine), **palette catégorielle** `--cat-1..5` (hues distincts). **Onglets** Tout/Immobilier/Épargne/Autres/**Passifs** pilotant les 2 sections. **Perf par actif clarifiée** : badge % à côté du nom, meta = croissance €/revenu €/charges €, chiffre à droite = **gain total/an €** (cohérent avec le %). Build + 129 tests verts. **Reste :** lien visuel actif↔emprunt, purge styles inline ; puis **Flux**, **Projection**. |
-| 6 — Onboarding + mode démo complet | ⬜ | `lib/demo.ts` + backup/restore |
+| 6 — Onboarding + mode démo complet | ⏸️ | **Reportée à la fin** (app pas encore terminée) — à faire en dernier, quand le reste est stable. `lib/demo.ts` + backup/restore. |
 | 7 — Graphes (SVG poli) | ✅ | **Palette catégorielle validée (CVD ΔE 13,4) + unifiée** (`--cat-1..5`, `SERIES_COLORS` alignées) via `validate_palette.js`. **Composition** : Épargne passée en or (levait 2 verts trop proches). **Tooltips unifiés** : les 3 graphes partageaient déjà `.chart-tip*` ; ajout pastille d'identité + texte en encre (série / P90-P10), plus de texte coloré. **Transitions d'entrée** : path-draw des courbes + fondu des aires (NetWorth, Compare). **Responsive** : `min-width` + `overflow-x` sur `.chart-wrap`/`.sankey-wrap`, légende `flex-wrap`. Sankey relu (couleurs sémantiques cohérentes). |
-| 8 — Responsive · a11y · print | ⬜ | — |
+| 8 — Responsive · a11y · print | ✅ | `prefers-reduced-motion` (`<MotionConfig reducedMotion="user">` + garde-fou CSS) ; **focus clavier** (`:focus-visible` global + anneau inputs) ; **modales** `role="dialog"`/`aria-modal`/`aria-label` + **focus-trap** (Tab cyclique, focus initial) ; **`@media print`** (recolore via surcharge tokens sombre→clair + masque nav/boutons + `break-inside`) ; **responsive** : Paramètres + **liste des plans (puces)** gardés dans la barre mobile, en-têtes `flex-wrap` (sidebar→top-bar 860px) ; **contraste** : `--ink-faint` remonté à AA (#7d857b), labels d'axes → `--ink-mute` (tous les tons passent AA). Copie FR : RAS critique. |
 
 **Décisions prises en cours de route** (à compléter au fil de l'eau)
 - **Horizon de projection = GLOBAL** (`settings.horizon`), pas par plan : c'est une préférence
@@ -655,6 +664,30 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⏸️ en pause/bloqué.
   dans Projection ne rejoue pas la transition de page.
 
 **Journal de session** (dernière en haut)
+- **2026-07-21 — Phase 8 · QC (2e passage, finitions).** `Modal` : **focus-trap** complet
+  (Tab/Shift+Tab cyclique via `FOCUSABLE`, focus initial en `requestAnimationFrame` sauf si un
+  champ `autoFocus` a déjà le focus, focus égaré ramené). **Mobile** : la liste des plans n'est
+  plus masquée → puces horizontales scrollables dans la barre du haut (switch de plan possible).
+  **Contraste (calculé, pas estimé)** : seul `--ink-faint` échouait (≈2,9:1) → remonté à
+  `#7d857b` (AA 4,7) ; `.chart-axis` (labels de données) passé de `--ink-faint` à `--ink-mute`
+  (5,7). Tous les tons de texte + accents passent désormais AA sur bg/panel/panel-2. Copie FR :
+  pas de TODO/anglais résiduel (léger `/an` vs `/ an` laissé — français valide). Build + 130
+  verts, boot OK.
+- **2026-07-21 — Phase 8 · QC (1er passage).** Audit : aucun `prefers-reduced-motion`, quasi
+  aucun focus-visible, modales sans `role`. Corrigé : `App` enveloppé dans
+  `<MotionConfig reducedMotion="user">` + `@media (prefers-reduced-motion: reduce)` (garde-fou
+  CSS) ; `:focus-visible` global (anneau `--brass-bright`) + variante inputs ; `Modal`
+  `role="dialog"`/`aria-modal`/`aria-label={title}` ; **feuille `@media print`** qui surcharge
+  les tokens (sombre→clair) → toute l'app + SVG passent en encre sur blanc, masque
+  nav/segments/boutons/actions, `break-inside: avoid`, `chart-svg min-width:0`. Responsive :
+  la sidebar→top-bar à 860px existait déjà ; ajout — Paramètres (roue) conservés dans la barre
+  mobile (au lieu de masquer tout le footer) + `.section-head/.plan-bar/.chart-head` en
+  `flex-wrap`. Build + 130 tests verts, 4 routes 200. **À vérifier à l'œil :** rendu print
+  (aperçu impression) et reduced-motion (réglage OS).
+- **2026-07-21 — Phase 6 REPORTÉE (décision).** On ne fait PAS l'onboarding / mode démo
+  maintenant : l'app n'est pas terminée, guider vers des écrans mouvants et figer un persona
+  serait à refaire. Phase 6 déplacée en toute fin de parcours (après Phase 8). Aucun code
+  écrit ; encadré ajouté en tête de la section Phase 6 + statut ⏸️ au tableau.
 - **2026-07-21 — Phase 7 · Graphes (SVG poli).** Palette `--cat-1..5` reréglée et **validée**
   (skill dataviz `validate_palette.js` : CVD pire paire ΔE 13,4 ≥ 12, chroma + contraste OK ;
   lightness hors bande = choix marque documenté) ; `SERIES_COLORS` (comparaison de plans)

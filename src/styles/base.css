@@ -41,6 +41,108 @@ body::before {
   color: #1a1408;
 }
 
+/* a11y — focus clavier visible partout (souris/tap = pas d'anneau grâce à :focus-visible).
+   L'outline suit le border-radius de l'élément sur les navigateurs modernes. */
+:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
+}
+
+/* a11y — prefers-reduced-motion : neutralise les animations/transitions CSS
+   (les animations `motion` sont couvertes par <MotionConfig reducedMotion="user">). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------- IMPRESSION ---------------------------
+   Export papier propre : on RECOLORE via les tokens (sombre → clair) → toute
+   l'app, y compris les SVG qui lisent var(), passe en encre sur blanc ; on masque
+   la nav et les contrôles interactifs ; on évite les coupures de blocs. */
+@media print {
+  :root {
+    --bg: #ffffff;
+    --bg-2: #ffffff;
+    --panel: #ffffff;
+    --panel-2: #fafaf8;
+    --panel-hi: #f3f3ef;
+    --ink: #16160f;
+    --ink-soft: #333329;
+    --ink-mute: #5a5a4f;
+    --ink-faint: #86867b;
+    --line: rgba(0, 0, 0, 0.12);
+    --line-strong: rgba(0, 0, 0, 0.22);
+    --line-brass: rgba(140, 110, 50, 0.45);
+    --brass: #8a6f2c;
+    --brass-bright: #6f5820;
+    --brass-deep: #5c4a1f;
+    --sage: #3e6a47;
+    --sage-deep: #33583b;
+    --gain: #2f7a45;
+    --gain-deep: #276b3c;
+    --drain: #b1571f;
+    --drain-deep: #97491d;
+    --shadow: none;
+    --shadow-soft: none;
+  }
+  body {
+    background: #fff;
+    color: var(--ink);
+  }
+  body::before {
+    display: none;
+  } /* pas de dégradés d'ambiance */
+  .sidebar,
+  .fam-tabs,
+  .row-actions,
+  .side-data,
+  .segment,
+  .btn,
+  .icon-btn,
+  .preset-row {
+    display: none !important;
+  }
+  .shell {
+    display: block;
+  }
+  .main {
+    padding: 0;
+    max-width: none;
+  }
+  .chart-svg {
+    min-width: 0;
+  }
+  /* les inputs/selects ont un fond rgba sombre codé en dur (pas un token) → forcer clair */
+  .input,
+  .select,
+  .money-input {
+    background: #fff !important;
+    color: var(--ink) !important;
+    border-color: var(--line-strong) !important;
+    box-shadow: none !important;
+  }
+  .card,
+  .row,
+  .fam,
+  .wealth-cell,
+  .dash-card,
+  section,
+  .asset-overview,
+  .patrimoine-overview {
+    break-inside: avoid;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 /* scrollbars */
 * {
   scrollbar-width: thin;

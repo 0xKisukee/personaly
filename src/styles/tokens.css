@@ -16,7 +16,7 @@
   --ink: #f3efe4;
   --ink-soft: #cbd0c4;
   --ink-mute: #8b948a;
-  --ink-faint: #5d655c;
+  --ink-faint: #7d857b; /* remonté pour passer WCAG AA (était #5d655c ≈ 2,9:1) */
 
   /* brass accent — wealth */
   --brass: #cba96b;

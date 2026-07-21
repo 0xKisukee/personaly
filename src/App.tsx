@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { StoreProvider } from "./lib/store";
-import { DEFAULT_PATH } from "./routes";
+import { DEFAULT_PATH, ROUTES } from "./routes";
 import Sidebar from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
@@ -17,6 +18,13 @@ function topSegment(pathname: string): string {
 
 function Shell() {
   const location = useLocation();
+
+  // titre du document par route → onglet du navigateur + en-tête d'impression corrects
+  useEffect(() => {
+    const seg = topSegment(location.pathname);
+    const route = ROUTES.find((r) => r.path === seg);
+    document.title = route ? `personaly — ${route.label}` : "personaly";
+  }, [location.pathname]);
 
   return (
     <div className="shell">
@@ -48,9 +56,11 @@ function Shell() {
 export default function App() {
   return (
     <StoreProvider>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
+      <MotionConfig reducedMotion="user">
+        <BrowserRouter>
+          <Shell />
+        </BrowserRouter>
+      </MotionConfig>
     </StoreProvider>
   );
 }

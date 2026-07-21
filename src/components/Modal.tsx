@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { IconClose } from "./icons";
@@ -11,11 +11,43 @@ interface Props {
   children: ReactNode;
 }
 
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 export default function Modal({ open, title, subtitle, onClose, children }: Props) {
+  const modalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+
+    // a11y : Escape ferme + Tab PIÉGÉ dans la modale (le focus n'en sort plus).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return onClose();
+      if (e.key !== "Tab") return;
+      const modal = modalRef.current;
+      if (!modal) return;
+      const items = modal.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !modal.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !modal.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
+
+    // focus initial : le 1er élément focusable, SAUF si un champ autoFocus l'a déjà pris.
+    const raf = requestAnimationFrame(() => {
+      const modal = modalRef.current;
+      if (modal && !modal.contains(document.activeElement)) {
+        modal.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      }
+    });
 
     // verrouille le scroll de l'arrière-plan tant que la modale est ouverte
     // (compense la largeur de la scrollbar pour éviter un saut de mise en page)
@@ -28,6 +60,7 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
 
     return () => {
       window.removeEventListener("keydown", onKey);
+      cancelAnimationFrame(raf);
       body.style.overflow = prevOverflow;
       body.style.paddingRight = prevPad;
     };
@@ -49,6 +82,10 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
         >
           <motion.div
             className="modal"
+            ref={modalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             initial={{ opacity: 0, y: 16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.99 }}

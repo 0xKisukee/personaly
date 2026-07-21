@@ -198,6 +198,12 @@
   box-shadow: 0 0 0 3px rgba(203, 169, 107, 0.13);
   background: rgba(10, 13, 11, 0.85);
 }
+/* focus CLAVIER : anneau franc en plus du liseré (a11y) */
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 1px;
+}
 .input::placeholder {
   color: var(--ink-faint);
 }
