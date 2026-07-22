@@ -17,8 +17,8 @@
    la 1re année ; les intérêts d'emprunt décroissent donc dès l'année suivante.
    =========================================================================== */
 
-import type { Asset, FlowEvent, Milestone, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState } from "./types";
-import { canReceiveDeposits, canTransfer, EPARGNE_ID, eventYear, flowBounds, refYear } from "./types";
+import type { Asset, FlowEvent, Milestone, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState, SurplusFlow } from "./types";
+import { canTransfer, EPARGNE_ID, eventYear, flowBounds, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
 
@@ -283,18 +283,19 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
     A.a.depositCap != null ? Math.max(0, A.a.depositCap - (A.a.depositsMade || 0)) : Infinity
   );
 
-  // cascade du surplus : actifs cibles ordonnés (existants, éligibles, sans doublon)
-  const targetIdxs: number[] = [];
-  for (const id of surplusTargets ?? []) {
-    const k = assets.findIndex((x) => x.id === id && canReceiveDeposits(x.a));
-    if (k < 0 || targetIdxs.includes(k)) continue;
-    targetIdxs.push(k);
+  // affectation du surplus : flows ordonnés, résolus vers l'index d'actif cible
+  // (existants, éligibles, sans doublon). Chaque flow garde son mode/cible.
+  const flows: { k: number; f: SurplusFlow }[] = [];
+  for (const f of surplusTargets ?? []) {
+    const k = assets.findIndex((x) => x.id === f.assetId && canTransfer(x.a));
+    if (k < 0 || flows.some((g) => g.k === k)) continue;
+    flows.push({ k, f });
   }
 
   // cascade de retrait (miroir) : actifs où puiser, dans l'ordre, pour combler un déficit
   const wTargetIdxs: number[] = [];
   for (const id of withdrawalTargets ?? []) {
-    const k = assets.findIndex((x) => x.id === id && canReceiveDeposits(x.a));
+    const k = assets.findIndex((x) => x.id === id && canTransfer(x.a));
     if (k < 0 || wTargetIdxs.includes(k)) continue;
     wTargetIdxs.push(k);
   }
@@ -474,6 +475,9 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
     const expMonthly = expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * flowFactor(it.growth, indexExpenses, i - expenseRef[k]) : 0));
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
+    // facteur d'inflation pur (1+infl)^i : indexe les montants/cibles des flows du surplus
+    // en euros CONSTANTS (sauf flow `nominal`), quels que soient indexIncomes/indexExpenses
+    const inflPow = Math.pow(1 + inflation / 100, i);
 
     // 1re année : uniquement les mois restants de l'année civile en cours
     const months = i === 0 ? 12 - startMonth : 12;
@@ -526,16 +530,28 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       savings += yieldThisMonth;
       const net = dist + extra - expense - chg - (mI + mP + mIns);
 
-      // surplus routé en cascade : chaque cible reçoit jusqu'à son plafond, l'excédent
-      // passe à la suivante ; ce qui reste (et les déficits) est porté par l'épargne
-      const monthDeps = targetIdxs.map(() => 0);
+      // surplus affecté aux flows dans l'ordre de priorité : chacun prélève dans le
+      // surplus RESTANT selon son mode (max / % du restant / montant fixe), borné par le
+      // plafond de versements ET le solde cible ; le reliquat (et les déficits) va à l'épargne
+      const monthDeps = flows.map(() => 0);
       let depTotal = 0;
       if (net > 0) {
         let rest = net;
-        for (let t = 0; t < targetIdxs.length && rest > 0; t++) {
-          const k = targetIdxs[t];
+        for (let t = 0; t < flows.length && rest > EPS; t++) {
+          const { k, f } = flows[t];
           if (!assets[k].active) continue;
-          const d = Math.min(rest, capLeftByAsset[k]);
+          // plafonds : versements cumulés restants ET « monter jusqu'au solde cible puis
+          // maintenir » (cible indexée sur l'inflation sauf si le flow est en euros courants)
+          const targetVal = f.targetBalance != null ? f.targetBalance * (f.nominal ? 1 : inflPow) : Infinity;
+          const targetRoom = targetVal === Infinity ? Infinity : Math.max(0, targetVal - assets[k].val);
+          const room = Math.min(capLeftByAsset[k], targetRoom);
+          if (room <= 0) continue;
+          // montant désiré selon le mode
+          let want: number;
+          if (f.mode === "percent") want = rest * ((f.percent ?? 0) / 100);
+          else if (f.mode === "amount") want = toMonthly({ amount: f.amount ?? 0, period: f.period ?? "monthly" }) * (f.nominal ? 1 : inflPow);
+          else want = room; // "max"
+          const d = Math.min(rest, room, want);
           if (d <= 0) continue;
           capLeftByAsset[k] -= d; rest -= d;
           monthDeps[t] += d; depTotal += d;
@@ -563,10 +579,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       }
 
       // versements APRÈS la croissance : le dépôt du mois se compose à partir du mois suivant
-      for (let t = 0; t < targetIdxs.length; t++) {
+      for (let t = 0; t < flows.length; t++) {
         if (monthDeps[t] > 0) {
-          assets[targetIdxs[t]].val += monthDeps[t];
-          aDep[targetIdxs[t]] += monthDeps[t];
+          assets[flows[t].k].val += monthDeps[t];
+          aDep[flows[t].k] += monthDeps[t];
         }
       }
 

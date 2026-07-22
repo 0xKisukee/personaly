@@ -25,10 +25,12 @@ export const ROUTES: RouteDef[] = [
 export const DEFAULT_PATH = "/";
 
 /* ----------------------- Sous-vues de la page Projection ----------------------
-   La page Projection a 4 vues portées par un segment d'URL : `/projection/:vue`.
-   `proj` est la vue par défaut → `/projection` (sans segment).                */
+   La page Projection a 5 vues portées par un segment d'URL : `/projection/:vue`.
+   `proj` est la vue par défaut → `/projection` (sans segment). Les hypothèses et
+   règles d'affectation vivent dans la vue dédiée `settings` (pour garder la
+   Projection épurée).                                                          */
 
-export type ProjectionViewId = "proj" | "events" | "cash" | "mc";
+export type ProjectionViewId = "proj" | "events" | "cash" | "mc" | "settings";
 
 /** ViewId → slug d'URL (`proj` = base, donc slug vide). */
 export const VIEW_SLUG: Record<ProjectionViewId, string> = {
@@ -36,6 +38,7 @@ export const VIEW_SLUG: Record<ProjectionViewId, string> = {
   events: "evenements",
   cash: "cash-flow",
   mc: "probabilite",
+  settings: "reglages",
 };
 
 /** slug d'URL → ViewId (tolérant : slug inconnu = vue par défaut `proj`). */

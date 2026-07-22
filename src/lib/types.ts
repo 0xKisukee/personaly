@@ -389,6 +389,32 @@ export type PlannedEvent = FlowEvent | BuyAssetEvent | SellAssetEvent | NewLoanE
 
 /* --------------------------- PROJECTION --------------------------- */
 
+/**
+ * Un FLOW d'affectation du surplus (« cash flow priority »). Les flows sont ORDONNÉS
+ * par priorité : chaque mois, le surplus (revenus − dépenses − emprunts) est servi aux
+ * flows dans l'ordre, chacun prélevant selon son `mode` ; le reliquat retombe en épargne.
+ *
+ *  - `max`     : verse le maximum possible (jusqu'à la cible/plafond) AVANT les flows
+ *                suivants — « maximise cette priorité ».
+ *  - `percent` : verse `percent` % du surplus RESTANT à ce stade (après les flows du dessus).
+ *  - `amount`  : verse un montant fixe `amount` par `period` (mensuel/annuel).
+ *
+ * Deux plafonds bornent chaque versement : le plafond de VERSEMENTS cumulés de l'actif
+ * (`depositCap`, partagé avec les transferts) ET, si défini, le SOLDE cible `targetBalance`
+ * (« monter jusqu'à ce solde puis maintenir » ; absent = « contribuer indéfiniment »).
+ * `nominal` : `amount`/`targetBalance` en euros COURANTS (fixes) ; défaut = euros CONSTANTS
+ * (le moteur les indexe sur l'inflation, comme un flux revalorisé).
+ */
+export interface SurplusFlow {
+  assetId: string; // actif cible (éligible : canReceiveDeposits)
+  mode: "max" | "percent" | "amount";
+  percent?: number; // mode "percent" : part du surplus restant (0–100)
+  amount?: number; // mode "amount" : montant par période
+  period?: Period; // mode "amount" : mensuel / annuel
+  targetBalance?: number; // solde à atteindre puis maintenir ; absent = sans plafond de solde
+  nominal?: boolean; // amount & targetBalance en euros courants (fixes) au lieu d'euros constants
+}
+
 /** Hypothèses de la page Projection (persistées). */
 export interface ProjectionParams {
   horizon: number; // nombre d'années projetées
@@ -397,10 +423,11 @@ export interface ProjectionParams {
   indexExpenses: boolean; // les dépenses suivent l'inflation (défaut si pas de taux propre)
   indexIncomes: boolean; // les revenus complémentaires suivent l'inflation (idem)
   realTerms: boolean; // affichage en euros constants (pouvoir d'achat)
-  // Cascade d'affectation du surplus mensuel : le 1er actif reçoit jusqu'à son
-  // plafond de versements, l'excédent passe au suivant, et ce qui reste va à
-  // l'épargne (taux savingsYield). Vide/absent = tout à l'épargne.
-  surplusTargets?: string[];
+  // Affectation du surplus mensuel : liste ORDONNÉE de flows (cash flow priorities).
+  // Chaque flow se sert dans le surplus restant selon son mode ; le reliquat va à
+  // l'épargne (taux savingsYield). Vide/absent = tout à l'épargne. (Historiquement un
+  // simple `string[]` d'ids en mode « max » — migré en SurplusFlow[] par le store.)
+  surplusTargets?: SurplusFlow[];
   // Cascade de RETRAIT (miroir du surplus) : quand l'épargne devient négative,
   // on puise dans ces actifs dans l'ordre (transfert neutre actif → épargne)
   // avant de laisser le déficit en épargne. Vide/absent = comportement actuel

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, EPARGNE_ID, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Milestone, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, EPARGNE_ID, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Milestone, type Plan, type PlannedEvent, type ProjectionParams, type SurplusFlow } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -20,9 +20,16 @@ function loadProjection(raw: object | undefined): ProjectionParams {
   // l'utilisateur l'avait vidée (« affectation zombie »).
   const legacyId = (raw as { surplusTargetId?: unknown } | undefined)?.surplusTargetId;
   if (!projection.surplusTargets && typeof legacyId === "string" && legacyId) {
-    projection.surplusTargets = [legacyId];
+    projection.surplusTargets = [legacyId] as unknown as SurplusFlow[];
   }
   delete (projection as Record<string, unknown>).surplusTargetId;
+  // surplusTargets : ancien `string[]` d'ids (mode « max » implicite) → SurplusFlow[].
+  // Les entrées déjà au format flow ({assetId,…}) sont conservées telles quelles.
+  if (Array.isArray(projection.surplusTargets)) {
+    projection.surplusTargets = (projection.surplusTargets as unknown[])
+      .map((t) => (typeof t === "string" ? { assetId: t, mode: "max" } : t))
+      .filter((t): t is SurplusFlow => !!t && typeof (t as SurplusFlow).assetId === "string") as SurplusFlow[];
+  }
   delete (projection as Record<string, unknown>).scenario; // héritée des scénarios (supprimés)
   delete (projection as Record<string, unknown>).goalAmount; // ancêtres de fiTarget
   delete (projection as Record<string, unknown>).goalYear;

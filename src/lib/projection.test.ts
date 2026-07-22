@@ -6,7 +6,7 @@
    Un bloc dédié teste le départ en cours d'année.
    =========================================================================== */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import type { Asset, Liability, PlannedEvent, ProjectionParams, SimState } from "./types";
+import type { Asset, Liability, PlannedEvent, ProjectionParams, SimState, SurplusFlow } from "./types";
 import { DEFAULT_PROJECTION, EPARGNE_ID } from "./types";
 import { project, type ProjectionResult, type YearPoint } from "./projection";
 import { monthlyPayment } from "./finance";
@@ -38,6 +38,9 @@ const params = (over: Partial<ProjectionParams> = {}): ProjectionParams => ({
 });
 
 const last = (r: ProjectionResult) => r.points[r.points.length - 1];
+
+/** Flows « maximiser » (comportement historique de la cascade) à partir d'ids. */
+const maxFlows = (...ids: string[]): SurplusFlow[] => ids.map((id) => ({ assetId: id, mode: "max" }));
 
 /** Enrichissement d'une année tel que la modale le calcule. */
 const enrich = (pt: YearPoint) =>
@@ -265,7 +268,7 @@ describe("cascade d'affectation du surplus", () => {
   });
 
   it("remplit dans l'ordre, respecte les plafonds, l'excédent va à l'épargne", () => {
-    const r = project(twoTargets, params({ horizon: 3, surplusTargets: ["liv", "pea"] }));
+    const r = project(twoTargets, params({ horizon: 3, surplusTargets: maxFlows("liv", "pea") }));
     const end = last(r);
     expect(end.detail.assets.find((a) => a.id === "liv")!.value).toBeCloseTo(25_000, 2);
     expect(end.detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(18_000, 2);
@@ -275,7 +278,7 @@ describe("cascade d'affectation du surplus", () => {
   });
 
   it("le routage est NEUTRE pour le patrimoine net (growth 0, yield 0)", () => {
-    const a = project(twoTargets, params({ horizon: 3, surplusTargets: ["liv", "pea"] }));
+    const a = project(twoTargets, params({ horizon: 3, surplusTargets: maxFlows("liv", "pea") }));
     const b = project(twoTargets, params({ horizon: 3 }));
     a.points.forEach((pt, i) => expect(pt.netWorth).toBeCloseTo(b.points[i].netWorth, 4));
   });
@@ -285,7 +288,7 @@ describe("cascade d'affectation du surplus", () => {
       assets: [asset({ id: "pea", value: 0, growthRate: 6 })],
       incomes: [{ id: "i", label: "S", category: "salaire", amount: 1_000, period: "monthly" }],
     });
-    const withPea = project(s, params({ horizon: 20, surplusTargets: ["pea"] }));
+    const withPea = project(s, params({ horizon: 20, surplusTargets: maxFlows("pea") }));
     const without = project(s, params({ horizon: 20 }));
     expect(last(withPea).netWorth).toBeGreaterThan(last(without).netWorth);
   });
@@ -295,7 +298,7 @@ describe("cascade d'affectation du surplus", () => {
       assets: [asset({ id: "h", category: "immobilier", value: 100_000 })],
       incomes: [{ id: "i", label: "S", category: "salaire", amount: 1_000, period: "monthly" }],
     });
-    const r = project(s, params({ horizon: 2, surplusTargets: ["fantôme", "h", "h"] }));
+    const r = project(s, params({ horizon: 2, surplusTargets: maxFlows("fantôme", "h", "h") }));
     expect(r.points.every((p) => p.deposited === 0)).toBe(true);
     expect(last(r).savings).toBeCloseTo(24_000, 4);
   });
@@ -305,9 +308,79 @@ describe("cascade d'affectation du surplus", () => {
       assets: [asset({ id: "pea", value: 10_000 })],
       expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 500, period: "monthly" }],
     });
-    const r = project(s, params({ horizon: 2, surplusTargets: ["pea"] }));
+    const r = project(s, params({ horizon: 2, surplusTargets: maxFlows("pea") }));
     expect(last(r).savings).toBeCloseTo(-12_000, 4);
     expect(last(r).grossAssets).toBe(10_000);
+  });
+
+  /* ---- modes de contribution (cash flow priorities) ---- */
+
+  const salaire1k = state({
+    assets: [asset({ id: "pea", value: 0 })],
+    incomes: [{ id: "i", label: "S", category: "salaire", amount: 1_000, period: "monthly" }],
+  });
+
+  it("mode « % du restant » : dédie un pourcentage du surplus, le reste à l'épargne", () => {
+    const r = project(salaire1k, params({ horizon: 1, surplusTargets: [{ assetId: "pea", mode: "percent", percent: 50 }] }));
+    expect(r.points[0].deposited).toBeCloseTo(6_000, 4); // 50 % de 12 000
+    expect(r.points[1].savings).toBeCloseTo(6_000, 4);
+    expect(r.points[1].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(6_000, 4);
+    checkInvariants(r);
+  });
+
+  it("mode « montant fixe » : verse le montant/période, plafonné au surplus disponible", () => {
+    const r = project(salaire1k, params({ horizon: 1, surplusTargets: [{ assetId: "pea", mode: "amount", amount: 300, period: "monthly" }] }));
+    expect(r.points[0].deposited).toBeCloseTo(3_600, 4); // 300 × 12
+    expect(r.points[1].savings).toBeCloseTo(8_400, 4);
+    // montant > surplus : tronqué à ce qui est disponible (pas de découvert)
+    const capped = project(salaire1k, params({ horizon: 1, surplusTargets: [{ assetId: "pea", mode: "amount", amount: 5_000, period: "monthly" }] }));
+    expect(capped.points[0].deposited).toBeCloseTo(12_000, 4);
+    expect(capped.points[1].savings).toBeCloseTo(0, 4);
+    checkInvariants(r);
+  });
+
+  it("montant fixe annuel indexé (€ constants) vs nominal fixe", () => {
+    const constant = project(salaire1k, params({ horizon: 5, inflation: 2, surplusTargets: [{ assetId: "pea", mode: "amount", amount: 100, period: "monthly" }] }));
+    const nominal = project(salaire1k, params({ horizon: 5, inflation: 2, surplusTargets: [{ assetId: "pea", mode: "amount", amount: 100, period: "monthly", nominal: true }] }));
+    expect(constant.points[2].deposited).toBeCloseTo(1_200 * 1.02 ** 2, 2); // indexé
+    expect(nominal.points[2].deposited).toBeCloseTo(1_200, 4); // plat
+    checkInvariants(constant);
+  });
+
+  it("solde cible : monte jusqu'au solde puis s'arrête (le reste va à l'épargne)", () => {
+    const r = project(salaire1k, params({ horizon: 2, surplusTargets: [{ assetId: "pea", mode: "max", targetBalance: 5_000 }] }));
+    expect(r.points[0].deposited).toBeCloseTo(5_000, 4); // atteint la cible en année 0
+    expect(r.points[1].savings).toBeCloseTo(7_000, 4); // 12 000 − 5 000
+    expect(r.points[1].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(5_000, 4);
+    expect(r.points[1].deposited).toBeCloseTo(0, 4); // déjà à la cible → plus rien
+    expect(r.points[2].savings).toBeCloseTo(19_000, 4); // + 12 000 en épargne
+    checkInvariants(r);
+  });
+
+  it("priorité : un flow « maximiser jusqu'à la cible » se sert AVANT un flow de plus basse priorité", () => {
+    const s = state({
+      assets: [asset({ id: "liv", value: 0 }), asset({ id: "pea", value: 0 })],
+      incomes: [{ id: "i", label: "S", category: "salaire", amount: 1_000, period: "monthly" }],
+    });
+    const r = project(s, params({ horizon: 1, surplusTargets: [
+      { assetId: "liv", mode: "max", targetBalance: 3_000 },
+      { assetId: "pea", mode: "percent", percent: 100 },
+    ] }));
+    expect(r.points[1].detail.assets.find((a) => a.id === "liv")!.value).toBeCloseTo(3_000, 4); // priorité 1 remplie
+    expect(r.points[1].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(9_000, 4); // le reste
+    expect(r.points[1].savings).toBeCloseTo(0, 4);
+    checkInvariants(r);
+  });
+
+  it("un compte courant (liquidités) peut recevoir le surplus", () => {
+    const s = state({
+      assets: [asset({ id: "cc", label: "Compte courant", category: "liquidites", value: 0 })],
+      incomes: [{ id: "i", label: "S", category: "salaire", amount: 1_000, period: "monthly" }],
+    });
+    const r = project(s, params({ horizon: 1, surplusTargets: maxFlows("cc") }));
+    expect(r.points[0].deposited).toBeCloseTo(12_000, 4);
+    expect(r.points[1].detail.assets.find((a) => a.id === "cc")!.value).toBeCloseTo(12_000, 4);
+    checkInvariants(r);
   });
 });
 
@@ -1116,6 +1189,17 @@ describe("cascade de retrait (décumulation)", () => {
     expect(r.points.every((pt) => pt.withdrawn === 0)).toBe(true);
     expect(last(r).savings).toBeCloseTo(-24_000, 4);
   });
+
+  it("un compte courant (liquidités) peut servir de source de retrait", () => {
+    const s = state({
+      assets: [asset({ id: "cc", label: "Compte courant", category: "liquidites", value: 20_000 })],
+      expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_000, period: "monthly" }],
+    });
+    const r = project(s, params({ horizon: 1, withdrawalTargets: ["cc"] }));
+    expect(r.points[0].withdrawn).toBeCloseTo(12_000, 4);
+    expect(r.points.every((pt) => pt.savings >= -0.01)).toBe(true);
+    checkInvariants(r);
+  });
 });
 
 /* --------------------------- scénario complet --------------------------- */
@@ -1158,7 +1242,7 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
     });
     const p = params({
       horizon: 25, inflation: 2, indexIncomes: true, indexExpenses: true,
-      savingsYield: 3, surplusTargets: ["livret", "pea"], fiTarget: 1_500_000,
+      savingsYield: 3, surplusTargets: maxFlows("livret", "pea"), fiTarget: 1_500_000,
     });
 
     const r = project(s, p);

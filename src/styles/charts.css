@@ -82,6 +82,85 @@
   color: var(--ink-mute);
 }
 
+/* --- éditeur des flows d'affectation du surplus (cash flow priorities) --- */
+.flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+}
+.flow-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(10, 13, 11, 0.4);
+}
+.flow-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.flow-rank {
+  font-size: 12px;
+  color: var(--ink-mute);
+  min-width: 14px;
+}
+.flow-head .select {
+  min-width: 140px;
+}
+.flow-modes {
+  font-size: 12px;
+}
+.flow-move {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.flow-move .icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(10, 13, 11, 0.6);
+}
+.flow-move .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.flow-move .icon-btn:not(:disabled):hover {
+  color: var(--brass-bright);
+}
+.flow-cfg {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-left: 22px;
+}
+.flow-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flow-input .input {
+  width: 96px;
+}
+.flow-nominal,
+.flow-modes {
+  white-space: nowrap;
+}
+.flow-add {
+  max-width: 320px;
+}
+.flow-rest {
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
 /* rangée d'événement : une colonne de plus (case à cocher) que .row standard */
 .row-ev {
   grid-template-columns: auto 40px 1fr auto;

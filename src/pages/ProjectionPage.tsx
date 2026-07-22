@@ -5,7 +5,7 @@ import { projectionPath, viewFromSlug, type ProjectionViewId } from "../routes";
 import type { PlannedEvent, ProjectionParams } from "../lib/types";
 import { eventYear, simInput, planMilestones } from "../lib/types";
 import { project } from "../lib/projection";
-import { canReceiveDeposits } from "../lib/types";
+import { canTransfer } from "../lib/types";
 import { grossWealth, totalLiabilities } from "../lib/selectors";
 import { uid } from "../lib/format";
 import PageHeader from "../components/PageHeader";
@@ -14,6 +14,7 @@ import { IconChart } from "../components/icons";
 import type { AppStateLike } from "./projection/eventHelpers";
 import { emptyEvent } from "./projection/eventHelpers";
 import ProjectionView from "./projection/ProjectionView";
+import SettingsView from "./projection/SettingsView";
 import EventsView from "./projection/EventsView";
 import CashflowView from "./projection/CashflowView";
 import MonteCarloView from "./projection/MonteCarloView";
@@ -28,6 +29,7 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: "events", label: "Événements" },
   { id: "cash", label: "Cash-flow" },
   { id: "mc", label: "Probabilité" },
+  { id: "settings", label: "Réglages" },
 ];
 
 /**
@@ -144,7 +146,7 @@ export default function ProjectionPage() {
     });
   };
 
-  const eligibleAssets = state.assets.filter(canReceiveDeposits);
+  const eligibleAssets = state.assets.filter(canTransfer);
   const selPoint = selYear !== null ? points.find((pt) => pt.year === selYear) ?? null : null;
 
   return (
@@ -212,7 +214,6 @@ export default function ProjectionPage() {
           {view === "proj" && (
             <ProjectionView
               p={p}
-              setP={setP}
               points={points}
               events={events}
               fiYearIndex={fiYearIndex}
@@ -221,10 +222,13 @@ export default function ProjectionPage() {
               planSeries={planSeries}
               plansCount={state.plans.length}
               milestones={milestones}
-              eligibleAssets={eligibleAssets}
               onEditEvent={editEvent}
               onSelectYear={setSelYear}
             />
+          )}
+
+          {view === "settings" && (
+            <SettingsView p={p} setP={setP} eligibleAssets={eligibleAssets} />
           )}
 
           {view === "events" && (

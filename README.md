@@ -24,9 +24,9 @@ npm test          # vitest run  (À LANCER APRÈS TOUTE MODIF DU MOTEUR/MODÈLE)
 npm run preview   # prévisualiser le build
 ```
 
-**Tests** (`src/lib/*.test.ts`, ~130 cas, temps figé) : moteur de projection + ses
+**Tests** (`src/lib/*.test.ts`, ~165 cas, temps figé) : moteur de projection + ses
 **invariants** (patrimoine début + enrichissement = début suivant ; sous-lignes qui somment
-aux agrégats ; neutralité des transferts : cascades surplus/retrait, versements, achats/ventes ;
+aux agrégats ; neutralité des transferts : flows du surplus/retrait, transferts, achats/ventes ;
 plafonds ; 6 événements ; jalons/dates relatives ; inflation/euros constants ; 1re année
 partielle), Monte Carlo (générateurs seedés + taux de succès), **migrations** localStorage
 (`store.test.ts`), **taxonomie d'actifs** (`assets.test.ts`, dont l'invariant « bloc UI
@@ -62,9 +62,9 @@ src/
     ├── PatrimoinePage.tsx  # 01 — Patrimoine (actifs + passifs)
     ├── FluxPage.tsx        # 02 — Flux (entrants/sortants)
     ├── ProjectionPage.tsx  # 03 — Projection : ORCHESTRATEUR (état, moteur, navigation, modales)
-    └── projection/         # les 4 vues + graphes SVG + modales (un fichier par responsabilité)
+    └── projection/         # les 5 vues + graphes SVG + modales (un fichier par responsabilité)
         └── ProjectionView EventsView CashflowView MonteCarloView
-            NetWorthChart CompareChart CascadeEditor EventModal YearDetailModal
+            NetWorthChart CompareChart CascadeEditor SurplusFlowEditor SettingsView EventModal YearDetailModal
             eventHelpers.ts chartUtils.ts
 ```
 
@@ -121,11 +121,12 @@ Un actif peut cumuler les deux (immo `rented` : valeur qui monte **et** loyer). 
 - **Familles** (regroupement de la liste) : Immobilier / Épargne & liquidités / Autres.
 - `normalizeAsset(a)` (appliqué à l'enregistrement) coupe les champs qu'une catégorie n'expose
   pas → pas de « loyer fantôme » sur un bien non loué.
-- **`DEPOSIT_ELIGIBLE = ["epargne"]`** (`canReceiveDeposits`) : seule l'épargne reçoit le
-  **surplus** de la projection (cascade). Invariant testé : `hasField(cat,"deposits")` ⇔
-  `canReceiveDeposits`. À NE PAS confondre avec **`TRANSFER_ELIGIBLE = ["epargne", "liquidites"]`**
-  (`canTransfer`) : les comptes **liquides** utilisables dans un `transfer` — plus large (inclut le
-  compte courant), avec l'**Épargne** (`EPARGNE_ID`) comme extrémité supplémentaire.
+- **`DEPOSIT_ELIGIBLE = ["epargne"]`** (`canReceiveDeposits`) : gouverne **uniquement** le champ
+  UI **plafond de versements** (`depositCap`, propre aux livrets/placements). Invariant testé :
+  `hasField(cat,"deposits")` ⇔ `canReceiveDeposits`. **Les mouvements de trésorerie** (affectation
+  du surplus, retraits en déficit, transferts) portent eux sur **`TRANSFER_ELIGIBLE = ["epargne",
+  "liquidites"]`** (`canTransfer`) : tous les **comptes liquides**, compte courant inclus — avec
+  l'**Épargne** (`EPARGNE_ID`) comme extrémité supplémentaire des transferts.
 
 ### Passif — emprunt amortissable
 
@@ -194,9 +195,16 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
 - Actifs `growthRate≠0` **composés** (mensuellement) ; emprunts **amortis** et éteints à terme
   (la mensualité libérée gonfle l'épargne).
 - Épargne cumulée **réinvestie** à `savingsYield`.
-- **Cascade de surplus** (`surplusTargets[]`, ordonné) : le surplus remplit le 1er actif éligible
-  jusqu'à son plafond, l'excédent passe au suivant. **Cascade de retrait** (`withdrawalTargets[]`,
-  miroir) : en déficit, on puise dans ces actifs avant de peser sur l'épargne (décumulation retraite).
+- **Affectation du surplus** (`surplusTargets: SurplusFlow[]`, ordonné = « cash flow priorities » ;
+  cibles = comptes liquides `canTransfer`, compte courant inclus) :
+  chaque mois le surplus est servi aux **flows** dans l'ordre de priorité, chacun prélevant dans le
+  surplus RESTANT selon son **mode** — `max` (verser le maximum, avant les flows suivants), `percent`
+  (% du restant), `amount` (montant fixe/période, indexé sur l'inflation sauf `nominal`) — borné par le
+  **plafond de versements** (`depositCap`, partagé avec les transferts) ET un éventuel **solde cible**
+  (`targetBalance` : « monter jusqu'à ce solde puis maintenir » ; absent = indéfini). Le reliquat
+  retombe en épargne. (Migré depuis l'ancien `string[]` d'ids = flows `max`.) **Cascade de retrait**
+  (`withdrawalTargets[]`, string[] ordonné) : en déficit, on puise dans ces actifs avant de peser sur
+  l'épargne (décumulation retraite).
 - **Indépendance financière** = seuil **saisi** (`fiTarget`), pas déduit ; le moteur marque la 1re
   année où le net l'atteint.
 - Hypothèses (persistées dans `plan.projection`) : `savingsYield`, `inflation`, indexation
@@ -204,15 +212,16 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   en bruitant la croissance selon `volatility` (seedé) → bandes P10–P90 + taux de succès.
 - La 1re année ne couvre que les **mois restants** de l'année civile.
 
-### Les 4 vues de Projection (`pages/projection/`)
+### Les 5 vues de Projection (`pages/projection/`)
 
 La page `ProjectionPage` orchestre (compose l'entrée, lance le moteur **une fois**, distribue),
-avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par l'URL (`/projection/:vue`) :
+avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par l'URL (`/projection/:vue`) :
 
-- **Projection** — hypothèses (panneau `.assum`), hero (net à l'horizon, évolution, CAGR), **graphe
-  SVG** en 3 modes (net / composition actifs·épargne·dettes / **Plans** : une courbe par plan) avec
-  jalons `◇`, marqueurs cliquables (`⚑` événement → édite, `✓` fin d'emprunt, `◆` FI) + légende ;
-  **table annuelle** → clic = modale **détail d'une année** (composition dépliable).
+- **Projection** — hero (net à l'horizon, évolution, CAGR), **graphe SVG** en 3 modes (net /
+  composition actifs·épargne·dettes / **Plans** : une courbe par plan) avec jalons `◇`, marqueurs
+  cliquables (`⚑` événement → édite, `✓` fin d'emprunt, `◆` FI) + légende ; **table annuelle** →
+  clic = modale **détail d'une année** (composition dépliable). **Volontairement épurée** (pas de
+  réglages) : c'est l'écran d'atterrissage. Seul le sélecteur d'**horizon** vit dans l'en-tête.
 - **Événements** — deux éditeurs `MilestonesEditor` : **jalons communs** (globaux, tous les plans)
   et **jalons propres à ce plan** (supplément) + liste des 6 événements (saisie via `WhenPicker` :
   année précise ou jalon ± n).
@@ -220,6 +229,10 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par
   affectations ; l'épargne est le **poste d'équilibre** (surplus « vers l'épargne » / déficit « puisé »).
 - **Probabilité** — **Monte Carlo** : jauge de **taux de succès** + **éventail** de percentiles
   (P10–P90 / P25–P75) + médiane + trajectoire déterministe en pointillé.
+- **Réglages** (`SettingsView`, panneau `.assum`) — toutes les **hypothèses** (rendement, inflation,
+  patrimoine d'indépendance, indexation, euros constants) et les **règles d'affectation** de trésorerie
+  (`SurplusFlowEditor` = flows du surplus, `CascadeEditor` = retraits en déficit). Isolé pour garder
+  la Projection propre pour les nouveaux utilisateurs.
 
 ---
 
@@ -294,11 +307,13 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 4 vues portées par
 - **Migrations tolérantes** (`store.tsx`, `loadState`/`migrateState`) : l'import passe par les
   **mêmes garanties**, tout se réécrit propre au prochain `setState`. Migrations actives :
   état **plat → plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios
-  retirés** (événement `scenario` → `disabled:true`, clé purgée) ; backfill `settings` (+ hissage
-  de `horizon` depuis le plan actif) ; remaps de catégories (`livret_epargne`/`placement`→`epargne`,
-  `compte_courant`→`liquidites`) ; purges héritées (`valuationRate`, `surplusTargetId`→`surplusTargets`,
-  `goalAmount`/`goalYear`→`fiTarget`) ; garde-fous (`activePlanId` invalide → 1er plan ; liste vide →
-  plan par défaut). **Après tout changement de modèle : ajouter/adapter une migration + un test.**
+  retirés** (événement `scenario` → `disabled:true`, clé purgée) ; **versement `deposit` → `transfer`
+  depuis l'Épargne** (`EPARGNE_ID`) ; **`surplusTargets: string[]` → `SurplusFlow[]`** (ids → flows
+  `max`) ; backfill `settings` (+ hissage de `horizon` depuis le plan actif) ; remaps de catégories
+  (`livret_epargne`/`placement`→`epargne`, `compte_courant`→`liquidites`) ; purges héritées
+  (`valuationRate`, `surplusTargetId`→`surplusTargets`, `goalAmount`/`goalYear`→`fiTarget`) ; garde-fous
+  (`activePlanId` invalide → 1er plan ; liste vide → plan par défaut). **Après tout changement de modèle :
+  ajouter/adapter une migration + un test.**
 
 ---
 
@@ -331,4 +346,4 @@ optionnel (la projection principale reste déterministe).
 3. `lib/assets.ts` — le registre des types d'actifs (taxonomie, presets, familles).
 4. `lib/selectors.ts` — calculs dérivés (patrimoine, flux, `assetPerformance`).
 5. `lib/store.tsx` — persistance + migrations (après tout changement de modèle).
-6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 4 vues).
+6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 5 vues).

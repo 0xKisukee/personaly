@@ -58,7 +58,7 @@ describe("loadState", () => {
   it("migre surplusTargetId (héritée) vers la cascade du plan, la clé est purgée", () => {
     write({ projection: { surplusTargetId: "pea" } });
     const s1 = loadState();
-    expect(s1.plans[0].projection.surplusTargets).toEqual(["pea"]);
+    expect(s1.plans[0].projection.surplusTargets).toEqual([{ assetId: "pea", mode: "max" }]);
     expect("surplusTargetId" in s1.plans[0].projection).toBe(false);
 
     // l'utilisateur vide la cascade puis l'état est re-persisté (comme le fait le provider)
@@ -68,6 +68,17 @@ describe("loadState", () => {
     });
     // le zombie ne ressuscite pas
     expect(loadState().plans[0].projection.surplusTargets).toBeUndefined();
+  });
+
+  it("migre surplusTargets ancien `string[]` → SurplusFlow[] (mode max) ; les flows déjà au format sont conservés", () => {
+    write({
+      plans: [{ id: "p1", name: "P", projection: { surplusTargets: ["liv", { assetId: "pea", mode: "percent", percent: 50 }] } }],
+      activePlanId: "p1",
+    });
+    expect(loadState().plans[0].projection.surplusTargets).toEqual([
+      { assetId: "liv", mode: "max" },
+      { assetId: "pea", mode: "percent", percent: 50 },
+    ]);
   });
 
   it("état à plans : complète les clés manquantes, purge `scenarios`, corrige un activePlanId invalide", () => {

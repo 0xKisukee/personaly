@@ -1,9 +1,8 @@
 import { motion } from "motion/react";
-import type { Asset, Milestone, ProjectionParams } from "../../lib/types";
+import type { Milestone, ProjectionParams } from "../../lib/types";
 import type { ProjectionEvent, YearPoint } from "../../lib/projection";
 import { money, signedMoney, percent } from "../../lib/format";
 import { Segment } from "../../ui";
-import CascadeEditor from "./CascadeEditor";
 import NetWorthChart from "./NetWorthChart";
 import CompareChart from "./CompareChart";
 import { SERIES_COLORS } from "./chartUtils";
@@ -12,16 +11,15 @@ type ChartMode = "net" | "composition" | "plans";
 type PlanSeries = { name: string; points: YearPoint[] }[] | null;
 
 /**
- * Vue Projection : hypothèses paramétrables, hero, indépendance financière,
- * graphe (net / composition / plans) et table annuelle cliquable.
+ * Vue Projection : hero, indépendance financière, graphe (net / composition / plans)
+ * et table annuelle cliquable. Les hypothèses/réglages vivent dans la vue Réglages.
  */
 export default function ProjectionView({
-  p, setP, points, events, fiYearIndex,
+  p, points, events, fiYearIndex,
   chartMode, setChartMode, planSeries, plansCount,
-  milestones, eligibleAssets, onEditEvent, onSelectYear,
+  milestones, onEditEvent, onSelectYear,
 }: {
   p: ProjectionParams;
-  setP: (patch: Partial<ProjectionParams>) => void;
   points: YearPoint[];
   events: ProjectionEvent[];
   fiYearIndex: number | null;
@@ -30,7 +28,6 @@ export default function ProjectionView({
   planSeries: PlanSeries;
   plansCount: number;
   milestones: Milestone[];
-  eligibleAssets: Asset[];
   onEditEvent: (id: string) => void;
   onSelectYear: (year: number) => void;
 }) {
@@ -49,70 +46,6 @@ export default function ProjectionView({
 
   return (
     <>
-      <motion.div
-        className="assum"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-      >
-        <div className="field assum-num">
-          <label>Rendement épargne réinvestie</label>
-          <div className="assum-input">
-            <input className="input mono" type="number" step="0.1" value={p.savingsYield || ""} placeholder="0"
-              onChange={(e) => setP({ savingsYield: Number(e.target.value) })} />
-            <span className="assum-unit">%/an</span>
-          </div>
-        </div>
-        <div className="field assum-num">
-          <label>Inflation</label>
-          <div className="assum-input">
-            <input className="input mono" type="number" step="0.1" value={p.inflation || ""} placeholder="0"
-              onChange={(e) => setP({ inflation: Number(e.target.value) })} />
-            <span className="assum-unit">%/an</span>
-          </div>
-        </div>
-        <div className="field assum-num">
-          <label>Patrimoine d'indépendance</label>
-          <div className="assum-input">
-            <input className="input mono" type="number" placeholder="montant" style={{ width: 130 }}
-              value={p.fiTarget ?? ""} onChange={(e) => setP({ fiTarget: e.target.value ? Number(e.target.value) : undefined })} />
-            <span className="assum-unit">€</span>
-          </div>
-        </div>
-        <div className="assum-toggles" title="Réglages communs à tous les plans">
-          <span className="eyebrow assum-toggles-note">Communs à tous les plans</span>
-          <label className="auto-toggle">
-            <input type="checkbox" checked={p.indexIncomes} onChange={(e) => setP({ indexIncomes: e.target.checked })} />
-            Indexer les revenus
-          </label>
-          <label className="auto-toggle">
-            <input type="checkbox" checked={p.indexExpenses} onChange={(e) => setP({ indexExpenses: e.target.checked })} />
-            Indexer les dépenses
-          </label>
-          <label className="auto-toggle">
-            <input type="checkbox" checked={p.realTerms} onChange={(e) => setP({ realTerms: e.target.checked })} />
-            Euros constants
-          </label>
-        </div>
-
-        {/* cascade d'affectation du surplus : actif 1 → actif 2 → … → épargne */}
-        <CascadeEditor
-          mode="surplus"
-          label="Affectation du surplus"
-          eligible={eligibleAssets}
-          ids={p.surplusTargets ?? []}
-          onChange={(ids) => setP({ surplusTargets: ids.length ? ids : undefined })}
-        />
-        {/* cascade de retrait (miroir) : où puiser quand le mois est déficitaire */}
-        <CascadeEditor
-          mode="withdraw"
-          label="Retraits en cas de déficit"
-          eligible={eligibleAssets}
-          ids={p.withdrawalTargets ?? []}
-          onChange={(ids) => setP({ withdrawalTargets: ids.length ? ids : undefined })}
-        />
-      </motion.div>
-
       {/* --------- hero --------- */}
       <motion.div className="wealth-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
         <div className="wealth-cell lead">
