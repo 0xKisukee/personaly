@@ -5,7 +5,7 @@ import Modal from "../../components/Modal";
 import WhenPicker from "../../components/WhenPicker";
 import {
   type AppStateLike, EVENT_KINDS, switchKind, RECURRABLE, DEFAULT_RECURRENCE,
-  sellableAssets, repayableLoans, depositableAssets,
+  sellableAssets, repayableLoans, transferableAccounts,
 } from "./eventHelpers";
 
 /** Modale de création / édition d'un événement daté (les 6 types + flux récurrent). */
@@ -28,7 +28,7 @@ export default function EventModal({ draft, s, onChange, onSave, onClose }: {
       : draft.kind === "buy" ? draft.price > 0
       : draft.kind === "sell" ? !!draft.assetId
       : draft.kind === "loan" ? draft.amount > 0 && draft.termMonths > 0
-      : draft.kind === "deposit" ? !!draft.assetId && draft.amount > 0
+      : draft.kind === "transfer" ? !!draft.fromId && !!draft.toId && draft.fromId !== draft.toId && draft.amount > 0
       : !!draft.loanId);
 
   // à l'enregistrement d'un achat : l'actif embarqué suit TOUJOURS le libellé de
@@ -238,23 +238,36 @@ export default function EventModal({ draft, s, onChange, onSave, onClose }: {
           </>
         )}
 
-        {draft.kind === "deposit" && (
+        {draft.kind === "transfer" && (
           <>
             <div className="field">
-              <label>Actif destinataire</label>
-              <select className="select" value={draft.assetId} onChange={(e) => set({ assetId: e.target.value })}>
-                {depositableAssets(s).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              <label>Compte source</label>
+              <select className="select" value={draft.fromId} onChange={(e) => {
+                const fromId = e.target.value;
+                // évite source == destination : repioche une destination si besoin
+                const toId = fromId === draft.toId ? (transferableAccounts(s).find((a) => a.id !== fromId)?.id ?? "") : draft.toId;
+                set({ fromId, toId });
+              }}>
+                {transferableAccounts(s).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
               </select>
             </div>
             <div className="field">
+              <label>Compte destinataire</label>
+              <select className="select" value={draft.toId} onChange={(e) => set({ toId: e.target.value })}>
+                {transferableAccounts(s).filter((a) => a.id !== draft.fromId).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </div>
+            <div className="field span-2">
               <label>Montant (€)</label>
-              <input className="input mono" type="number" placeholder="ex. 10 000"
+              <input className="input mono" type="number" placeholder="ex. 15 000"
                 value={draft.amount || ""} onChange={(e) => set({ amount: Number(e.target.value) })} />
             </div>
             <span className="help span-2">
-              Transfert <b>neutre</b> de l'épargne vers l'actif à la date (il compose ensuite au taux de l'actif).
-              Le <b>plafond de versements</b> est respecté — la capacité est partagée avec la cascade du surplus.
-              Seuls les comptes, livrets et placements sont éligibles.
+              Déplace de l'argent entre deux <b>comptes liquides</b> — l'<b>Épargne</b> (ta trésorerie) ou un
+              livret / placement / compte courant. Ex. <b>Épargne → PEA</b> (placer ton cash), <b>PEA → Livret A</b>
+              (rééquilibrer), <b>PEA → Épargne</b> (remettre au liquide). <b>Neutre</b> pour le patrimoine. Plafonné
+              au solde de la source <b>et</b>, si la destination a un plafond de versements, à ce qu'il en reste
+              (partagé avec la cascade du surplus).
             </span>
           </>
         )}
@@ -352,10 +365,10 @@ export default function EventModal({ draft, s, onChange, onSave, onClose }: {
                     <b> revendu</b> (à sa valeur projetée, neutre) et un neuf acheté — idéal pour « changer de voiture
                     tous les 10 ans ». Pour un achat <b>à crédit</b> répété, ajoute un <b>Emprunt</b> récurrent de même
                     cadence. <b>Ajustement</b> = prix un peu plus élevé (ou bas) à chaque fois.</>
-                  ) : draft.kind === "deposit" ? (
-                    <>Répète ce <b>versement</b> vers l'actif à intervalle régulier (ex. 5 000 € sur le PEA chaque année).
-                    Le <b>plafond de versements</b> reste respecté, instance après instance.
-                    <b> Ajustement</b> = montant modulé à chaque fois.</>
+                  ) : draft.kind === "transfer" ? (
+                    <>Répète ce <b>transfert</b> entre comptes à intervalle régulier (ex. placer 5 000 € d'<b>Épargne</b>
+                    sur le PEA, ou rééquilibrer PEA → Livret A, chaque année). Le <b>plafond de versements</b> d'une
+                    destination-actif reste respecté. <b>Ajustement</b> = montant modulé à chaque fois.</>
                   ) : draft.kind === "loan" ? (
                     <>Répète ce <b>nouvel emprunt</b> à intervalle régulier (souvent couplé à un <b>Achat</b> récurrent de
                     même cadence pour financer chaque remplacement). <b>Ajustement</b> = capital modulé à chaque fois.</>

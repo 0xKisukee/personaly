@@ -7,7 +7,7 @@
    =========================================================================== */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Asset, Liability, PlannedEvent, ProjectionParams, SimState } from "./types";
-import { DEFAULT_PROJECTION } from "./types";
+import { DEFAULT_PROJECTION, EPARGNE_ID } from "./types";
 import { project, type ProjectionResult, type YearPoint } from "./projection";
 import { monthlyPayment } from "./finance";
 
@@ -429,33 +429,6 @@ describe("événements datés", () => {
     checkInvariants(r);
   });
 
-  it("versement : transfert neutre épargne → actif, plafond partagé avec la cascade", () => {
-    const s = state({
-      assets: [asset({ id: "pea", value: 10_000, depositCap: 16_000, depositsMade: 10_000 })],
-      events: [
-        { id: "c", kind: "cash", label: "Prime", year: Y, amount: 20_000 },
-        { id: "d", kind: "deposit", label: "Versement PEA", year: Y + 2, assetId: "pea", amount: 10_000 },
-      ],
-    });
-    const r = project(s, params({ horizon: 4 }));
-    // tronqué à la capacité restante (6 000)
-    expect(r.points[2].deposited).toBeCloseTo(6_000, 6);
-    expect(r.points[3].detail.assets[0].value).toBeCloseTo(16_000, 4);
-    expect(r.points[3].savings).toBeCloseTo(14_000, 4);
-    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
-    checkInvariants(r);
-  });
-
-  it("versement vers un actif inéligible : ignoré + warning", () => {
-    const s = state({
-      assets: [asset({ id: "h", category: "immobilier", value: 100_000 })],
-      events: [{ id: "d", kind: "deposit", label: "Vers. maison", year: Y + 1, assetId: "h", amount: 5_000 }],
-    });
-    const r = project(s, params({ horizon: 2 }));
-    expect(r.points.every((p) => p.deposited === 0)).toBe(true);
-    expect(r.warnings).toHaveLength(1);
-  });
-
   it("alerte quand un achat rend l'épargne négative", () => {
     const r = project(state({ events: [buy] }), params({ horizon: 4 }));
     expect(r.warnings.some((w) => w.label.includes("Épargne négative"))).toBe(true);
@@ -493,9 +466,9 @@ describe("événements datés", () => {
     expect(r.points.every((p) => p.eventCash === 0)).toBe(true);
   });
 
-  it("ordre dans une même année : sell → cash → loan → repay → buy → deposit", () => {
+  it("ordre dans une même année : sell → cash → loan → repay → buy → transfer", () => {
     // tout-en-un : vendre la maison, hériter, emprunter, solder l'ancien prêt,
-    // acheter le nouveau bien, verser au PEA — le cash entre avant de sortir
+    // acheter le nouveau bien, verser au PEA depuis l'épargne — le cash entre avant de sortir
     const pmt = monthlyPayment(40_000, 3, 120);
     const s = state({
       assets: [
@@ -504,7 +477,7 @@ describe("événements datés", () => {
       ],
       liabilities: [loan({ id: "l1", outstanding: 40_000, rate: 3, termMonths: 120, monthlyPayment: pmt })],
       events: [
-        { id: "dep", kind: "deposit", label: "PEA", year: Y + 1, assetId: "pea", amount: 30_000 },
+        { id: "dep", kind: "transfer", label: "PEA", year: Y + 1, fromId: EPARGNE_ID, toId: "pea", amount: 30_000 },
         { id: "b", kind: "buy", label: "Nouveau", year: Y + 1, price: 250_000, asset: asset({ id: "new", category: "immobilier" }) },
         { id: "rp", kind: "repay", label: "Solde", year: Y + 1, loanId: "l1" },
         { id: "ln", kind: "loan", label: "Prêt", year: Y + 1, amount: 150_000, rate: 3, termMonths: 240 },
@@ -518,6 +491,159 @@ describe("événements datés", () => {
     expect(r.warnings.filter((w) => w.label.includes("Épargne négative"))).toHaveLength(0);
     expect(r.points[2].grossAssets).toBeGreaterThan(250_000); // nouveau bien + PEA
     checkInvariants(r);
+  });
+});
+
+/* ---------------------------- transferts ---------------------------- */
+
+describe("transferts entre comptes liquides (kind transfer)", () => {
+  const twoAssets = () => state({
+    assets: [
+      asset({ id: "pea", label: "PEA", category: "epargne", value: 50_000 }),
+      asset({ id: "liv", label: "Livret", category: "epargne", value: 5_000 }),
+    ],
+  });
+
+  it("déplace la valeur source → destination, neutre pour le patrimoine net", () => {
+    const s = twoAssets();
+    s.events = [{ id: "t", kind: "transfer", label: "PEA → Livret", year: Y + 2, fromId: "pea", toId: "liv", amount: 20_000 }];
+    const r = project(s, params({ horizon: 4 }));
+    // l'année du transfert : retrait ET versement de 20 000 (qui s'annulent)
+    expect(r.points[2].withdrawn).toBeCloseTo(20_000, 4);
+    expect(r.points[2].deposited).toBeCloseTo(20_000, 4);
+    // valeurs déplacées à l'année suivante (colonne = début d'année)
+    expect(r.points[3].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(30_000, 4);
+    expect(r.points[3].detail.assets.find((a) => a.id === "liv")!.value).toBeCloseTo(25_000, 4);
+    checkInvariants(r);
+  });
+
+  it("NEUTRE : mêmes trajectoires de patrimoine net qu'un plan sans transfert", () => {
+    const s = twoAssets();
+    const withT = project({ ...s, events: [{ id: "t", kind: "transfer", label: "T", year: Y + 1, fromId: "pea", toId: "liv", amount: 15_000 }] }, params({ horizon: 4 }));
+    const without = project(s, params({ horizon: 4 }));
+    withT.points.forEach((pt, i) => expect(pt.netWorth).toBeCloseTo(without.points[i].netWorth, 4));
+  });
+
+  it("plafonné par le plafond de versements de la destination", () => {
+    const s = twoAssets();
+    s.assets[1] = asset({ id: "liv", category: "epargne", value: 22_000, depositCap: 22_950, depositsMade: 22_000 }); // 950 de capacité
+    s.events = [{ id: "t", kind: "transfer", label: "T", year: Y + 1, fromId: "pea", toId: "liv", amount: 20_000 }];
+    const r = project(s, params({ horizon: 3 }));
+    expect(r.points[1].deposited).toBeCloseTo(950, 4);
+    expect(r.points[1].withdrawn).toBeCloseTo(950, 4);
+    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("plafonné par la valeur disponible de la source", () => {
+    const s = twoAssets();
+    s.assets[0] = asset({ id: "pea", category: "epargne", value: 5_000 });
+    s.events = [{ id: "t", kind: "transfer", label: "T", year: Y + 1, fromId: "pea", toId: "liv", amount: 20_000 }];
+    const r = project(s, params({ horizon: 3 }));
+    expect(r.points[1].deposited).toBeCloseTo(5_000, 4);
+    expect(r.points[2].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(0, 4);
+    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("source introuvable ou source = destination : ignoré + warning", () => {
+    const s = twoAssets();
+    s.events = [
+      { id: "t1", kind: "transfer", label: "Fantôme", year: Y + 1, fromId: "nope", toId: "liv", amount: 10_000 },
+      { id: "t2", kind: "transfer", label: "Boucle", year: Y + 1, fromId: "liv", toId: "liv", amount: 10_000 },
+    ];
+    const r = project(s, params({ horizon: 2 }));
+    expect(r.points.every((p) => p.deposited === 0 && p.withdrawn === 0)).toBe(true);
+    expect(r.warnings.filter((w) => w.label.includes("ignoré"))).toHaveLength(2);
+  });
+
+  it("récurrent : répété à chaque intervalle, plafond de destination respecté au total", () => {
+    const s = state({
+      assets: [
+        asset({ id: "pea", category: "epargne", value: 100_000 }),
+        asset({ id: "liv", category: "epargne", value: 0, depositCap: 25_000 }),
+      ],
+      events: [{ id: "t", kind: "transfer", label: "Rééquilibrage", year: Y, fromId: "pea", toId: "liv", amount: 10_000, recurrence: { everyYears: 2 } }],
+    });
+    const r = project(s, params({ horizon: 8 }));
+    // instances en Y, Y+2, Y+4… mais total versé plafonné à 25 000
+    expect(r.points.reduce((t, p) => t + p.deposited, 0)).toBeCloseTo(25_000, 4);
+    expect(r.points.reduce((t, p) => t + p.withdrawn, 0)).toBeCloseTo(25_000, 4);
+    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  /* ---- l'ÉPARGNE comme extrémité (remplace l'ancien « versement ») ---- */
+
+  it("Épargne → actif = l'ancien versement (plafond partagé avec la cascade)", () => {
+    const s = state({
+      assets: [asset({ id: "pea", value: 10_000, depositCap: 16_000, depositsMade: 10_000 })],
+      events: [
+        { id: "c", kind: "cash", label: "Prime", year: Y, amount: 20_000 },
+        { id: "t", kind: "transfer", label: "Vers PEA", year: Y + 2, fromId: EPARGNE_ID, toId: "pea", amount: 10_000 },
+      ],
+    });
+    const r = project(s, params({ horizon: 4 }));
+    // tronqué à la capacité de versement restante (6 000)
+    expect(r.points[2].deposited).toBeCloseTo(6_000, 6);
+    expect(r.points[3].detail.assets[0].value).toBeCloseTo(16_000, 4);
+    expect(r.points[3].savings).toBeCloseTo(14_000, 4); // 20 000 − 6 000 restés en épargne
+    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("actif → Épargne : retrait partiel vers le cash (neutre), sans plafond", () => {
+    const s = state({
+      assets: [asset({ id: "pea", value: 50_000 })],
+      events: [{ id: "t", kind: "transfer", label: "Sécurise", year: Y + 1, fromId: "pea", toId: EPARGNE_ID, amount: 20_000 }],
+    });
+    const r = project(s, params({ horizon: 3 }));
+    expect(r.points[1].withdrawn).toBeCloseTo(20_000, 4);
+    expect(r.points[1].deposited).toBe(0);
+    expect(r.points[2].detail.assets.find((a) => a.id === "pea")!.value).toBeCloseTo(30_000, 4);
+    expect(r.points[2].savings).toBeCloseTo(20_000, 4);
+    checkInvariants(r);
+  });
+
+  it("Épargne → actif au-delà du solde : découvert signalé (comme l'ancien versement)", () => {
+    const s = state({
+      assets: [asset({ id: "pea", value: 0 })],
+      events: [{ id: "t", kind: "transfer", label: "Trop gros", year: Y + 1, fromId: EPARGNE_ID, toId: "pea", amount: 50_000 }],
+    });
+    const r = project(s, params({ horizon: 2 }));
+    // pas de plafond → 50 000 versés, mais l'épargne plonge en négatif → alerte
+    expect(r.points[1].deposited).toBeCloseTo(50_000, 4);
+    expect(r.warnings.some((w) => w.label.includes("Épargne négative"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("le compte courant (liquidités) est un compte liquide valide en source ET destination", () => {
+    const s = state({
+      assets: [
+        asset({ id: "cc", label: "Compte courant", category: "liquidites", value: 40_000 }),
+        asset({ id: "liv", label: "Livret", category: "epargne", value: 0, depositCap: 30_000 }),
+      ],
+      events: [{ id: "t", kind: "transfer", label: "CC → Livret", year: Y + 1, fromId: "cc", toId: "liv", amount: 25_000 }],
+    });
+    const r = project(s, params({ horizon: 3 }));
+    expect(r.points[1].withdrawn).toBeCloseTo(25_000, 4);
+    expect(r.points[1].deposited).toBeCloseTo(25_000, 4);
+    expect(r.points[2].detail.assets.find((a) => a.id === "cc")!.value).toBeCloseTo(15_000, 4);
+    expect(r.points[2].detail.assets.find((a) => a.id === "liv")!.value).toBeCloseTo(25_000, 4);
+    checkInvariants(r);
+  });
+
+  it("destination non liquide (immobilier) : ignoré + warning", () => {
+    const s = state({
+      assets: [
+        asset({ id: "pea", category: "epargne", value: 50_000 }),
+        asset({ id: "h", category: "immobilier", value: 100_000 }),
+      ],
+      events: [{ id: "t", kind: "transfer", label: "Vers maison", year: Y + 1, fromId: "pea", toId: "h", amount: 10_000 }],
+    });
+    const r = project(s, params({ horizon: 2 }));
+    expect(r.points.every((p) => p.deposited === 0 && p.withdrawn === 0)).toBe(true);
+    expect(r.warnings.some((w) => w.label.includes("non liquide"))).toBe(true);
   });
 });
 
@@ -624,12 +750,12 @@ describe("récurrence d'événements", () => {
     checkInvariants(r);
   });
 
-  it("versement récurrent : répété, plafond de versements respecté instance après instance", () => {
+  it("transfert récurrent depuis l'épargne : répété, plafond de versements respecté instance après instance", () => {
     const s = state({
       assets: [asset({ id: "pea", value: 0, depositCap: 25_000 })],
       events: [
         { id: "c", kind: "cash", label: "Apport", year: Y, amount: 100_000 },
-        { id: "d", kind: "deposit", label: "PEA annuel", year: Y, assetId: "pea", amount: 10_000, recurrence: { everyYears: 2 } },
+        { id: "d", kind: "transfer", label: "PEA annuel", year: Y, fromId: EPARGNE_ID, toId: "pea", amount: 10_000, recurrence: { everyYears: 2 } },
       ],
     });
     const r = project(s, params({ horizon: 8 }));
@@ -1020,7 +1146,7 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
       ],
       events: [
         { id: "her", kind: "cash", label: "Héritage", year: Y + 6, amount: 90_000 },
-        { id: "dep", kind: "deposit", label: "Gros versement PEA", year: Y + 6, assetId: "pea", amount: 60_000 },
+        { id: "dep", kind: "transfer", label: "Gros versement PEA", year: Y + 6, fromId: EPARGNE_ID, toId: "pea", amount: 60_000 },
         { id: "ln2", kind: "loan", label: "Prêt travaux", year: Y + 8, amount: 30_000, rate: 4, termMonths: 84, insurance: 8 },
         { id: "trav", kind: "cash", label: "Travaux", year: Y + 8, amount: -35_000 },
         { id: "sellcar", kind: "sell", label: "Vente voiture", year: Y + 9, assetId: "car", price: 5_000 },

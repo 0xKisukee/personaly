@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Milestone, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
+import { DEFAULT_PLAN, DEFAULT_PROJECTION, DEFAULT_SETTINGS, EMPTY_STATE, EPARGNE_ID, type AppState, type Asset, type AssetCategory, type Liability, type LiabilityCategory, type Milestone, type Plan, type PlannedEvent, type ProjectionParams } from "./types";
 
 const STORAGE_KEY = "personaly:v1";
 
@@ -75,16 +75,24 @@ function normalizeLiabilities(raw: unknown): Liability[] {
 }
 
 /**
- * Migration : les SCÉNARIOS n'existent plus. Un événement tagué devient un
- * événement DÉSACTIVÉ du plan (rien n'est perdu, et la trajectoire de Base est
- * inchangée : ces événements en étaient déjà exclus). La clé est purgée.
+ * Migrations d'événements (idempotentes) :
+ *  - SCÉNARIOS retirés : un événement tagué devient DÉSACTIVÉ (la clé est purgée ;
+ *    la trajectoire de Base est inchangée, ces événements en étaient déjà exclus).
+ *  - VERSEMENT (`deposit`) retiré : devient un TRANSFERT depuis l'Épargne
+ *    (`fromId = EPARGNE_ID`, `toId` = l'actif destinataire d'origine). Sémantique
+ *    identique (Épargne → actif éligible), et `transfer` en est un sur-ensemble.
  */
 function normalizeEvents(raw: unknown): PlannedEvent[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((ev: PlannedEvent & { scenario?: string }) => {
+  return raw.map((ev: Record<string, unknown>) => {
     const { scenario, ...rest } = ev;
-    return scenario ? { ...rest, disabled: true } : rest;
-  }) as PlannedEvent[];
+    const base = scenario ? { ...rest, disabled: true } : rest;
+    if (base.kind === "deposit") {
+      const { assetId, ...b } = base;
+      return { ...b, kind: "transfer", fromId: EPARGNE_ID, toId: assetId };
+    }
+    return base;
+  }) as unknown as PlannedEvent[];
 }
 
 /**

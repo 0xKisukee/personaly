@@ -142,11 +142,28 @@ export interface Asset {
   note?: string;
 }
 
-/** Catégories d'actifs pouvant recevoir des versements (surplus d'épargne). */
+/** Catégories d'actifs pouvant recevoir le SURPLUS de la projection (cascade). */
 export const DEPOSIT_ELIGIBLE: AssetCategory[] = ["epargne"];
 
 export function canReceiveDeposits(a: Pick<Asset, "category">): boolean {
   return DEPOSIT_ELIGIBLE.includes(a.category);
+}
+
+/**
+ * L'ÉPARGNE (le solde de trésorerie, poste d'équilibre du moteur) exposée comme un
+ * COMPTE à part entière : un id réservé qui sert d'extrémité (source ou destination)
+ * aux transferts. Sa valeur reste CALCULÉE (revenus − dépenses + flux) — ce n'est pas
+ * un actif éditable, juste un endpoint. `uid()` ne produit jamais cet id.
+ */
+export const EPARGNE_ID = "__epargne__";
+export const EPARGNE_LABEL = "Épargne";
+
+/** Comptes LIQUIDES, seuls concernés par les transferts (avec l'Épargne). Plus large
+ *  que les versements : inclut le compte courant (liquidités) en plus de l'épargne. */
+export const TRANSFER_ELIGIBLE: AssetCategory[] = ["epargne", "liquidites"];
+
+export function canTransfer(a: Pick<Asset, "category">): boolean {
+  return TRANSFER_ELIGIBLE.includes(a.category);
 }
 
 export type LiabilityCategory =
@@ -346,17 +363,29 @@ export interface RepayLoanEvent extends EventBase {
 }
 
 /**
- * Versement ponctuel : de l'épargne vers un actif ÉLIGIBLE (canReceiveDeposits).
- * Transfert neutre. Respecte le plafond de versements de l'actif — la capacité
- * est PARTAGÉE avec la cascade du surplus (un versement la consomme d'autant).
+ * Transfert ponctuel entre deux COMPTES LIQUIDES (l'Épargne — `EPARGNE_ID` — ou un
+ * actif `canTransfer` : livret, placement, compte courant). NEUTRE pour le patrimoine :
+ * la valeur SORT de la source et ENTRE dans la destination, comptée comme un retrait
+ * (source) ET un versement (destination) qui s'annulent.
+ *
+ * Couvre à lui seul les trois directions (l'ancien « Versement » n'est qu'un cas) :
+ *   • Épargne → actif  (= l'ancien versement)
+ *   • actif → Épargne  (retrait partiel vers le cash)
+ *   • actif → actif    (rééquilibrage PEA → Livret…)
+ *
+ * Une destination-actif respecte son PLAFOND de versements (capacité partagée avec la
+ * cascade du surplus). Le montant est plafonné au minimum de : montant demandé, solde
+ * disponible de la source (∞ si c'est l'Épargne — un découvert est signalé), capacité
+ * restante de la destination (∞ pour l'Épargne ou un compte sans plafond).
  */
-export interface DepositEvent extends EventBase {
-  kind: "deposit";
-  assetId: string; // actif existant ou créé par un événement "buy"
+export interface TransferEvent extends EventBase {
+  kind: "transfer";
+  fromId: string; // compte source : EPARGNE_ID ou actif canTransfer (existant / créé par un "buy")
+  toId: string; // compte destinataire : EPARGNE_ID ou actif canTransfer
   amount: number;
 }
 
-export type PlannedEvent = FlowEvent | BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent | DepositEvent;
+export type PlannedEvent = FlowEvent | BuyAssetEvent | SellAssetEvent | NewLoanEvent | CashEvent | RepayLoanEvent | TransferEvent;
 
 /* --------------------------- PROJECTION --------------------------- */
 

@@ -8,8 +8,9 @@ import { money } from "../lib/format";
    L'épargne est le POSTE D'ÉQUILIBRE : ce qui reste part « vers l'épargne »,
    un déficit apparaît côté sources en « puisé dans l'épargne » — les deux
    colonnes somment donc toujours au même total (aucun flux n'est perdu).
-   Les versements d'événements (kind "deposit") sont déjà comptés dans
-   `deposited` : on les exclut des barres Événements pour ne pas les doubler.
+   Les transferts (kind "transfer") sont NEUTRES (cash 0) et déjà portés par
+   `deposited` / `withdrawn` : leur cash nul les exclut naturellement des barres
+   Événements, sans double compte.
    =========================================================================== */
 
 interface Node {
@@ -27,10 +28,10 @@ const TOP = 30;
 
 export default function SankeyChart({ point }: { point: YearPoint }) {
   const evIn = point.detail.events
-    .filter((e) => e.kind !== "deposit" && e.cash > 0)
+    .filter((e) => e.cash > 0)
     .reduce((t, e) => t + e.cash, 0);
   const evOut = point.detail.events
-    .filter((e) => e.kind !== "deposit" && e.cash < 0)
+    .filter((e) => e.cash < 0)
     .reduce((t, e) => t - e.cash, 0);
 
   const inflows = point.distributed + point.extra + point.savingsYield + point.withdrawn + evIn;

@@ -18,7 +18,7 @@
    =========================================================================== */
 
 import type { Asset, FlowEvent, Milestone, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState } from "./types";
-import { canReceiveDeposits, eventYear, flowBounds, refYear } from "./types";
+import { canReceiveDeposits, canTransfer, EPARGNE_ID, eventYear, flowBounds, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
 
@@ -43,7 +43,7 @@ import { monthlyPayment } from "./finance";
  * ou non) sur l'inflation à son année, sauf si `nominal:true` (cf. `evInfl` dans project()).
  * Les instances héritent du flag `nominal` du motif source (spread `...ev`).
  */
-const RECURRABLE_KINDS: PlannedEvent["kind"][] = ["buy", "cash", "deposit", "loan"];
+const RECURRABLE_KINDS: PlannedEvent["kind"][] = ["buy", "cash", "loan", "transfer"];
 
 export function expandRecurring(
   events: PlannedEvent[], milestones: Milestone[], startYear: number, horizon: number
@@ -66,7 +66,7 @@ export function expandRecurring(
     // uniformément par le moteur (evInfl), pour les événements récurrents comme ponctuels.
     const scaleAt = (k: number) => Math.pow(1 + (r.scaling ?? 0) / 100, k);
 
-    if (ev.kind === "cash" || ev.kind === "deposit" || ev.kind === "loan") {
+    if (ev.kind === "cash" || ev.kind === "loan" || ev.kind === "transfer") {
       years.forEach((y, k) => out.push({
         ...ev, id: k === 0 ? ev.id : `${ev.id}~${k}`, year: y, when: k === 0 ? ev.when : undefined,
         amount: ev.amount * scaleAt(k), recurrence: undefined,
@@ -223,7 +223,7 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   // l'année effective résout l'ancrage jalon (l'instantané `year` sert de secours
   // si le jalon a été supprimé — on le signale). Dans une même année, le cash ENTRE
   // d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats).
-  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { flow: -1, sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
+  const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { flow: -1, sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, transfer: 5 };
   const plannedByYear = new Map<number, Exclude<PlannedEvent, FlowEvent>[]>();
   for (const ev of allEvents) {
     if (ev.disabled || ev.kind === "flow") continue;
@@ -278,7 +278,7 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   }
 
   // capacité de versement restante PAR ACTIF (plafond − versements déjà effectués) —
-  // partagée entre la cascade du surplus et les événements "deposit"
+  // partagée entre la cascade du surplus et les transferts (destination-actif)
   const capLeftByAsset = assets.map((A) =>
     A.a.depositCap != null ? Math.max(0, A.a.depositCap - (A.a.depositsMade || 0)) : Infinity
   );
@@ -414,24 +414,50 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
         cash = -(assets[k].val + fees);
         savings += cash;
         evFees += fees;
-      } else if (ev.kind === "deposit") {
-        const k = assets.findIndex((x) => x.id === ev.assetId);
-        if (k < 0 || !assets[k].active || !canReceiveDeposits(assets[k].a)) {
-          warnings.push({ year, label: `« ${ev.label} » ignoré : actif introuvable, vendu ou inéligible aux versements` });
+      } else if (ev.kind === "transfer") {
+        // TRANSFERT entre comptes liquides. Une extrémité peut être l'ÉPARGNE (le pool
+        // `savings`, exposé comme un compte via EPARGNE_ID) ou un actif `canTransfer`.
+        // Couvre l'ancien « versement » (Épargne → actif), le retrait partiel (actif →
+        // Épargne) et le rééquilibrage (actif → actif). NEUTRE : compté comme un retrait
+        // (source) ET un versement (destination) qui s'annulent au net.
+        const fromPool = ev.fromId === EPARGNE_ID;
+        const toPool = ev.toId === EPARGNE_ID;
+        const from = fromPool ? -1 : assets.findIndex((x) => x.id === ev.fromId);
+        const to = toPool ? -1 : assets.findIndex((x) => x.id === ev.toId);
+        if (!fromPool && (from < 0 || !assets[from].active || !canTransfer(assets[from].a))) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : compte source introuvable, vendu ou non liquide` });
           continue;
         }
-        // transfert neutre épargne → actif, dans la limite du plafond de versements
-        const req = (ev.amount || 0) * evInfl;
-        const amt = Math.min(req, capLeftByAsset[k]);
-        if (amt < req - EPS) {
-          warnings.push({ year, label: `« ${ev.label} » plafonné : ${Math.round(amt)} € versés (plafond de versements atteint)` });
+        if (!toPool && (to < 0 || !assets[to].active || !canTransfer(assets[to].a))) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : compte destinataire introuvable, vendu ou non liquide` });
+          continue;
         }
-        capLeftByAsset[k] -= amt;
-        assets[k].val += amt;
-        aDep[k] += amt;
-        yDep += amt;
-        cash = -amt;
-        savings += cash;
+        if (ev.fromId === ev.toId) {
+          warnings.push({ year, label: `« ${ev.label} » ignoré : source et destination identiques` });
+          continue;
+        }
+        // plafonné au min(demandé, solde source, capacité destination). L'Épargne n'a
+        // pas de plafond (∞) : depuis l'Épargne, un découvert éventuel est signalé plus bas.
+        const req = (ev.amount || 0) * evInfl;
+        const srcCap = fromPool ? Infinity : Math.max(0, assets[from].val);
+        const dstCap = toPool ? Infinity : capLeftByAsset[to];
+        const amt = Math.min(req, srcCap, dstCap);
+        if (amt < req - EPS) {
+          warnings.push({ year, label: `« ${ev.label} » plafonné : ${Math.round(amt)} € transférés (solde source ou plafond de versements atteint)` });
+        }
+        // source : depuis l'Épargne → baisse le cash ; depuis un actif → retrait neutre
+        if (fromPool) savings -= amt;
+        else { assets[from].val -= amt; aWdr[from] += amt; yWdr += amt; }
+        // destination : vers l'Épargne → monte le cash ; vers un actif → versement neutre (plafond)
+        if (toPool) savings += amt;
+        else { capLeftByAsset[to] -= amt; assets[to].val += amt; aDep[to] += amt; yDep += amt; }
+        // depuis l'Épargne, un transfert peut la faire passer sous zéro : la cascade de
+        // retrait liquide d'abord (si configurée), sinon on alerte (comme l'ancien versement).
+        if (fromPool && savings < -EPS) {
+          coverDeficit();
+          if (savings < -EPS) warnings.push({ year, label: `Épargne négative après « ${ev.label} » (${year})` });
+        }
+        // cash / fees / gain restent à 0 : le mouvement neutre est porté par deposited/withdrawn.
       }
       evDetails.push({ id: ev.id, label: ev.label || ev.kind, kind: ev.kind, cash, fees, gain });
       events.push({ yearIndex: i, year, label: ev.label || ev.kind, kind: "planned", id: ev.id });

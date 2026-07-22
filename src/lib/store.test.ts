@@ -10,7 +10,7 @@ vi.stubGlobal("localStorage", {
 });
 
 import { loadState, migrateState, serializeState } from "./store";
-import { EMPTY_STATE, canReceiveDeposits } from "./types";
+import { EMPTY_STATE, EPARGNE_ID, canReceiveDeposits } from "./types";
 
 const KEY = "personaly:v1";
 const write = (state: object) => mem.set(KEY, JSON.stringify(state));
@@ -158,6 +158,31 @@ describe("loadState", () => {
     expect(s.assets[0].depositCap).toBe(22950); // plafond conservé
     expect(canReceiveDeposits(s.assets[0])).toBe(true); // epargne reste éligible
     expect(canReceiveDeposits(s.assets[2])).toBe(false); // immobilier non éligible
+  });
+
+  it("migre un « versement » (deposit) retiré en transfert depuis l'Épargne (récurrence/flags conservés)", () => {
+    write({
+      plans: [{
+        id: "p1", name: "P", projection: {},
+        events: [
+          { id: "d", kind: "deposit", label: "PEA", year: 2030, assetId: "pea", amount: 5_000, disabled: true, recurrence: { everyYears: 2 } },
+          { id: "c", kind: "cash", label: "Prime", year: 2031, amount: 1_000 },
+        ],
+      }],
+      activePlanId: "p1",
+    });
+    const ev = loadState().plans[0].events;
+    const t = ev.find((e) => e.id === "d")!;
+    expect(t.kind).toBe("transfer");
+    expect("assetId" in t).toBe(false); // ancienne clé retirée
+    if (t.kind === "transfer") {
+      expect(t.fromId).toBe(EPARGNE_ID);
+      expect(t.toId).toBe("pea");
+      expect(t.amount).toBe(5_000);
+    }
+    expect(t.disabled).toBe(true); // flags conservés
+    expect(t.recurrence).toEqual({ everyYears: 2 });
+    expect(ev.find((e) => e.id === "c")!.kind).toBe("cash"); // les autres intacts
   });
 });
 

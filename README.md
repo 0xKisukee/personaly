@@ -121,8 +121,11 @@ Un actif peut cumuler les deux (immo `rented` : valeur qui monte **et** loyer). 
 - **Familles** (regroupement de la liste) : Immobilier / Épargne & liquidités / Autres.
 - `normalizeAsset(a)` (appliqué à l'enregistrement) coupe les champs qu'une catégorie n'expose
   pas → pas de « loyer fantôme » sur un bien non loué.
-- **`DEPOSIT_ELIGIBLE = ["epargne"]`** : seule l'épargne reçoit le surplus de la projection.
-  Invariant testé : `hasField(cat,"deposits")` ⇔ `canReceiveDeposits`.
+- **`DEPOSIT_ELIGIBLE = ["epargne"]`** (`canReceiveDeposits`) : seule l'épargne reçoit le
+  **surplus** de la projection (cascade). Invariant testé : `hasField(cat,"deposits")` ⇔
+  `canReceiveDeposits`. À NE PAS confondre avec **`TRANSFER_ELIGIBLE = ["epargne", "liquidites"]`**
+  (`canTransfer`) : les comptes **liquides** utilisables dans un `transfer` — plus large (inclut le
+  compte courant), avec l'**Épargne** (`EPARGNE_ID`) comme extrémité supplémentaire.
 
 ### Passif — emprunt amortissable
 
@@ -149,11 +152,21 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   (`birthYear + ESPERANCE_AGE`, 85 ans ; recalé quand on change la date de naissance dans les
   Paramètres). S'il est supprimé, il n'est **pas** réajouté. Un **nouveau plan** est vide et
   hérite simplement des jalons globaux.
-- **PlannedEvent** = 6 types datés (ou ancrés) : `buy` `sell` `loan` `cash` `repay` `deposit`.
+- **PlannedEvent** = 6 types datés (ou ancrés) : `buy` `sell` `loan` `cash` `repay` `transfer`.
   **Atomiques** (un achat financé = `loan` + `buy` la même année). Transferts **neutres** pour
   le net, sauf frais (`eventFees`), plus-value réalisée (`eventGain`) et rentrées/sorties
   (`eventCash`). `disabled` exclut sans supprimer. Un cas inapplicable → **warning** (jamais
   d'annulation silencieuse).
+- **`transfer`** déplace de l'argent entre deux **comptes liquides** — l'**Épargne** (le pool
+  de trésorerie `savings`, exposé comme un compte via `EPARGNE_ID`) ou un actif **`canTransfer`**
+  (`TRANSFER_ELIGIBLE = ["epargne", "liquidites"]`). Il **remplace l'ancien `deposit`** (versement)
+  dont il est un sur-ensemble : `Épargne → actif` (= l'ancien versement), `actif → Épargne`
+  (retrait partiel), `actif → actif` (rééquilibrage). **Neutre** : compté comme un **retrait**
+  (source, `withdrawn`) ET un **versement** (destination, `deposited`) qui s'annulent au net.
+  Une destination-actif respecte son **plafond de versements** (`capLeftByAsset`, partagé avec la
+  cascade du surplus) ; l'Épargne n'a pas de plafond (∞, un découvert est signalé). Montant borné
+  par `min(demandé, solde source, capacité destination)`. Migration : les `deposit` persistés
+  deviennent des `transfer` depuis l'Épargne (`store.tsx`).
 - **Euros constants vs courants** (`nominal?` sur **tout** événement) : par **défaut** un montant est en
   **euros d'aujourd'hui** — le moteur l'**indexe sur l'inflation** jusqu'à l'année de l'événement
   (`evInfl`), donc un don de 150 k€ en 2050 = 150 k€ de pouvoir d'achat actuel (plus élevé nominalement,
@@ -163,12 +176,12 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   elle compose depuis **aujourd'hui** (le montant est en euros constants dès un début futur) ; en `nominal`,
   depuis le **début du flux** (le 1er versement = le montant saisi, nominal — ex. « pension de 2 000 €
   nominaux en 2050 »). Détail crucial pour un flux qui **démarre dans le futur**.
-- **Récurrence** (`Recurrence` sur `buy`/`cash`/`deposit`/`loan`) : répète un événement à
+- **Récurrence** (`Recurrence` sur `buy`/`cash`/`loan`/`transfer`) : répète un événement à
   intervalle régulier. Le moteur ne fait pas de récurrence « vivante » — il **déplie** le motif
   en instances atomiques datées **avant** la simulation (`expandRecurring`), donc les invariants
   tiennent sans cas spécial. `buy` = **remplacement** (chaque échéance revend l'exemplaire précédent
   à sa valeur projetée, puis achète un neuf — « changer de voiture tous les 10 ans » ; `keepLast`
-  garde la dernière) ; `cash`/`deposit`/`loan` = **répétition** du montant. Le dépliage n'applique que
+  garde la dernière) ; `cash`/`loan`/`transfer` = **répétition** du montant. Le dépliage n'applique que
   le `scaling` (réévaluation **réelle**) ; l'inflation de chaque instance vient du moteur (`evInfl`,
   selon `nominal`). Instances éditables depuis le graphe (id dérivé `${id}~k` tronqué pour retrouver
   le motif source).

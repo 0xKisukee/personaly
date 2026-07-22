@@ -91,7 +91,8 @@ export default function YearDetailModal({ point, real, onClose }: { point: YearP
           )}
           {point.eventGain !== 0 && <YdFlow label="Plus/moins-value réalisée" v={point.eventGain} pos={point.eventGain >= 0} />}
           {point.eventFees > 0 && <YdFlow label="Frais d'événements" v={-point.eventFees} />}
-          {d.events.filter((e) => e.kind !== "cash").map((e) => (
+          {/* transfert exclu : son mouvement neutre est déjà porté par « Versé / Retiré des actifs » (deposited/withdrawn) */}
+          {d.events.filter((e) => e.kind !== "cash" && e.kind !== "transfer").map((e) => (
             <YdFlow key={e.id} label={`⚑ ${e.label} (cash)`} v={e.cash} neutral sub />
           ))}
           <div className="yd-row yd-total">

@@ -11,8 +11,9 @@ export default function CashflowView({ points, realTerms }: { points: YearPoint[
   const idx = Math.min(rawIdx, points.length - 1);
   const pt = points[idx];
 
-  const evIn = pt.detail.events.filter((e) => e.kind !== "deposit" && e.cash > 0).reduce((t, e) => t + e.cash, 0);
-  const evOut = pt.detail.events.filter((e) => e.kind !== "deposit" && e.cash < 0).reduce((t, e) => t - e.cash, 0);
+  // les transferts sont neutres (cash 0) : déjà portés par deposited/withdrawn, ils ne comptent pas ici
+  const evIn = pt.detail.events.filter((e) => e.cash > 0).reduce((t, e) => t + e.cash, 0);
+  const evOut = pt.detail.events.filter((e) => e.cash < 0).reduce((t, e) => t - e.cash, 0);
   const inflows = pt.distributed + pt.extra + pt.savingsYield + pt.withdrawn + evIn;
   const outflows = pt.expenses + pt.charges + pt.interest + pt.insurance + pt.principal + pt.deposited + evOut;
   const saved = inflows - outflows;

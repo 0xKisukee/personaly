@@ -4,7 +4,7 @@
  * Partagé par EventsView (liste) et EventModal (édition).
  */
 import type { AssetCategory, Milestone, PlannedEvent, Recurrence } from "../../lib/types";
-import { canReceiveDeposits, eventYear } from "../../lib/types";
+import { canTransfer, EPARGNE_ID, EPARGNE_LABEL, eventYear } from "../../lib/types";
 import { assetLabel } from "../../lib/assets";
 import { money, signedMoney, percent, uid, whenLabel } from "../../lib/format";
 import { formatDuration } from "../../lib/finance";
@@ -15,7 +15,7 @@ export const DEFAULT_RECURRENCE: Recurrence = { everyYears: 10, keepLast: true }
 /** Types récurrables : achat (remplacement) + flux « neufs » à montant répété
  *  (rentrée/sortie, versement, emprunt). Pas de récurrence pour vente/remboursement
  *  (ils ciblent un actif/emprunt précis) ni pour le flux (déjà récurrent par nature). */
-export const RECURRABLE: PlannedEvent["kind"][] = ["buy", "cash", "deposit", "loan"];
+export const RECURRABLE: PlannedEvent["kind"][] = ["buy", "cash", "loan", "transfer"];
 
 /** Résumé lisible d'une récurrence, pour la liste des événements. */
 export function recurrenceSummary(r: Recurrence, milestones: Milestone[]): string {
@@ -31,7 +31,7 @@ export const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
   { id: "sell", label: "Vente" },
   { id: "loan", label: "Emprunt" },
   { id: "repay", label: "Remboursement" },
-  { id: "deposit", label: "Versement" },
+  { id: "transfer", label: "Transfert" },
 ];
 
 /** Vue minimale de l'état dont les helpers d'événements ont besoin. */
@@ -62,7 +62,11 @@ export function switchKind(ev: PlannedEvent, kind: PlannedEvent["kind"], s: AppS
     case "sell": return { ...base, kind, assetId: sellableAssets(s)[0]?.id ?? "", feesPct: 0 };
     case "loan": return { ...base, kind, amount: 0, rate: 0, termMonths: 240 };
     case "repay": return { ...base, kind, loanId: repayableLoans(s)[0]?.id ?? "" };
-    case "deposit": return { ...base, kind, assetId: depositableAssets(s)[0]?.id ?? "", amount: 0 };
+    case "transfer": {
+      // par défaut : Épargne → 1er compte liquide (= l'ancien versement, le cas le plus courant)
+      const accounts = transferableAccounts(s);
+      return { ...base, kind, fromId: EPARGNE_ID, toId: accounts.find((a) => a.id !== EPARGNE_ID)?.id ?? "", amount: 0 };
+    }
   }
 }
 
@@ -82,13 +86,16 @@ export function repayableLoans(s: AppStateLike): { id: string; label: string }[]
   ];
 }
 
-/** Actifs pouvant recevoir un versement : éligibles (compte, livret, placement), existants ou achetés par événement. */
-export function depositableAssets(s: AppStateLike): { id: string; label: string }[] {
+/** Comptes utilisables dans un transfert (source OU destination) : l'Épargne (le pool
+ *  de trésorerie, exposé comme un compte) + les actifs LIQUIDES (livret, placement,
+ *  compte courant), existants ou créés par un événement "buy". */
+export function transferableAccounts(s: AppStateLike): { id: string; label: string }[] {
   return [
-    ...s.assets.filter((a) => canReceiveDeposits(a)).map((a) => ({ id: a.id, label: a.label || "Actif" })),
+    { id: EPARGNE_ID, label: EPARGNE_LABEL },
+    ...s.assets.filter((a) => canTransfer(a)).map((a) => ({ id: a.id, label: a.label || "Actif" })),
     ...s.events
       .filter((e) => e.kind === "buy")
-      .filter((e) => canReceiveDeposits(e.asset))
+      .filter((e) => canTransfer(e.asset))
       .map((e) => ({ id: e.asset.id, label: `${e.label || "Achat"} (${eventYear(e, s.milestones)})` })),
   ];
 }
@@ -114,9 +121,11 @@ export function eventSummary(ev: PlannedEvent, s: AppStateLike): string {
       const label = repayableLoans(s).find((l) => l.id === ev.loanId)?.label ?? "emprunt inconnu";
       return `Remboursement anticipé de ${label} · ${ev.amount != null ? money(ev.amount) : "totalité"}`;
     }
-    case "deposit": {
-      const label = depositableAssets(s).find((a) => a.id === ev.assetId)?.label ?? "actif inconnu";
-      return `Versement · ${money(ev.amount)} → ${label}`;
+    case "transfer": {
+      const accounts = transferableAccounts(s);
+      const from = accounts.find((a) => a.id === ev.fromId)?.label ?? "compte inconnu";
+      const to = accounts.find((a) => a.id === ev.toId)?.label ?? "compte inconnu";
+      return `Transfert · ${money(ev.amount)} · ${from} → ${to}`;
     }
   }
 }
