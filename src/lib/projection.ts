@@ -17,15 +17,91 @@
    la 1re année ; les intérêts d'emprunt décroissent donc dès l'année suivante.
    =========================================================================== */
 
-import type { Asset, FlowEvent, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState } from "./types";
+import type { Asset, FlowEvent, Milestone, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState } from "./types";
 import { canReceiveDeposits, eventYear, flowBounds, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
+
+/**
+ * DÉPLIAGE de la récurrence : transforme chaque événement récurrent en une suite
+ * d'instances datées atomiques, AVANT la simulation. Les événements non récurrents
+ * (ou d'un type non récurrable) passent tels quels. Les instances portent un id
+ * dérivé (`${id}~${k}`) — la source se retrouve en tronquant après le `~` (les ids
+ * d'`uid()` n'en contiennent pas), ce qui permet d'éditer le motif depuis un
+ * marqueur du graphe.
+ *
+ *  - CASH / VERSEMENT / EMPRUNT : simple RÉPÉTITION du même `amount` (un emprunt
+ *    récurrent + un achat récurrent de même cadence = un achat FINANCÉ répété,
+ *    ex. changer de voiture à crédit tous les 10 ans).
+ *  - ACHAT : REMPLACEMENT. Chaque nouvelle instance revend d'abord la précédente
+ *    (vente à la valeur projetée → neutre), puis achète un actif neuf (nouvel id).
+ *    `keepLast` (défaut) garde la dernière ; sinon elle est revendue à l'échéance
+ *    suivante (si elle tombe dans l'horizon).
+ *
+ * Le dépliage n'applique QUE le `scaling` (réévaluation réelle, facteur (1+scaling)^k).
+ * L'INFLATION n'est PAS gérée ici : le moteur indexe TOUT montant d'événement (récurrent
+ * ou non) sur l'inflation à son année, sauf si `nominal:true` (cf. `evInfl` dans project()).
+ * Les instances héritent du flag `nominal` du motif source (spread `...ev`).
+ */
+const RECURRABLE_KINDS: PlannedEvent["kind"][] = ["buy", "cash", "deposit", "loan"];
+
+export function expandRecurring(
+  events: PlannedEvent[], milestones: Milestone[], startYear: number, horizon: number
+): PlannedEvent[] {
+  const endMax = startYear + horizon;
+  const out: PlannedEvent[] = [];
+  for (const ev of events) {
+    const r = ev.recurrence;
+    if (!r || ev.disabled || r.everyYears < 1 || !RECURRABLE_KINDS.includes(ev.kind)) { out.push(ev); continue; }
+
+    const step = Math.max(1, Math.round(r.everyYears));
+    const base = eventYear(ev, milestones);
+    const stop = Math.min(refYear(r.untilRef, milestones) ?? r.untilYear ?? endMax, endMax);
+    // k = 0 est TOUJOURS émis (le motif d'origine s'applique même si `until` est mal réglé),
+    // puis les répétitions tant qu'elles tombent avant l'arrêt et dans l'horizon.
+    const years = [base];
+    for (let y = base + step; y <= stop; y += step) years.push(y);
+
+    // seule la réévaluation RÉELLE (scaling) est appliquée ici ; l'inflation est gérée
+    // uniformément par le moteur (evInfl), pour les événements récurrents comme ponctuels.
+    const scaleAt = (k: number) => Math.pow(1 + (r.scaling ?? 0) / 100, k);
+
+    if (ev.kind === "cash" || ev.kind === "deposit" || ev.kind === "loan") {
+      years.forEach((y, k) => out.push({
+        ...ev, id: k === 0 ? ev.id : `${ev.id}~${k}`, year: y, when: k === 0 ? ev.when : undefined,
+        amount: ev.amount * scaleAt(k), recurrence: undefined,
+      }));
+    } else if (ev.kind === "buy") {
+      let prevAssetId = "";
+      years.forEach((y, k) => {
+        const factor = scaleAt(k);
+        const assetId = k === 0 ? ev.asset.id : `${ev.asset.id}~${k}`;
+        if (k > 0) out.push({ id: `${ev.id}~s${k}`, kind: "sell", label: `Revente ${ev.label}`, year: y, assetId: prevAssetId });
+        out.push({
+          ...ev, id: k === 0 ? ev.id : `${ev.id}~${k}`, year: y, when: k === 0 ? ev.when : undefined,
+          price: ev.price * factor, fees: ev.fees != null ? ev.fees * factor : undefined,
+          asset: { ...ev.asset, id: assetId }, recurrence: undefined,
+        });
+        prevAssetId = assetId;
+      });
+      // dernière instance revendue à l'échéance suivante si `keepLast` est désactivé
+      const endSale = years[years.length - 1] + step;
+      if (!r.keepLast && endSale <= endMax) {
+        out.push({ id: `${ev.id}~sEnd`, kind: "sell", label: `Revente ${ev.label}`, year: endSale, assetId: prevAssetId });
+      }
+    }
+  }
+  return out;
+}
 
 /** Forme minimale d'un flux consommée par le moteur (revenu/dépense OU flux d'événement). */
 interface FlowLike {
   id: string; label: string; amount: number; period: Period;
   startYear?: number; endYear?: number; startRef?: MilestoneRef; endRef?: MilestoneRef; growth?: number;
+  /** Flux d'événement : le montant est nominal l'année de DÉBUT (euros courants à la date),
+   *  au lieu d'être en euros d'aujourd'hui. Change l'ANNÉE de référence de la revalorisation :
+   *  elle compose depuis le début du flux (et non depuis aujourd'hui). Cf. `nominal` sur EventBase. */
+  nominal?: boolean;
 }
 
 export interface ProjectOptions {
@@ -114,6 +190,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   const ageAt = (y: number) => (birthYear ? y - birthYear : null);
   const milestones = s.milestones ?? [];
 
+  // récurrence dépliée en instances atomiques datées (achat = remplacement, cash = répétition) ;
+  // l'inflation de chaque instance est appliquée en aval par le moteur (evInfl) — cf. expandRecurring
+  const allEvents = expandRecurring(s.events ?? [], milestones, startYear, horizon);
+
   const assets: SimAsset[] = s.assets.map((a) => ({ id: a.id, label: a.label || "Actif", a, val: a.value || 0, active: true }));
   const loans: SimLoan[] = s.liabilities.map((l) => ({
     id: l.id, label: l.label || "Emprunt", balance: l.outstanding || 0,
@@ -131,10 +211,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   // plan, pas comme des événements ponctuels : on les replie dans les flux
   // mensuels. `year`/`when` = début, `endYear`/`endRef` = fin. Leur libellé porte
   // un préfixe ⚑ dans le détail pour les distinguer des flux des finances courantes.
-  const flowEvents = (s.events ?? []).filter((e): e is FlowEvent => e.kind === "flow" && !e.disabled);
+  const flowEvents = allEvents.filter((e): e is FlowEvent => e.kind === "flow" && !e.disabled);
   const asFlowItem = (e: FlowEvent): FlowLike => ({
     id: e.id, label: `⚑ ${e.label || "Flux"}`, amount: e.amount, period: e.period,
-    startYear: e.year, startRef: e.when, endYear: e.endYear, endRef: e.endRef, growth: e.growth,
+    startYear: e.year, startRef: e.when, endYear: e.endYear, endRef: e.endRef, growth: e.growth, nominal: e.nominal,
   });
   const incomes: FlowLike[] = [...s.incomes, ...flowEvents.filter((e) => e.direction === "in").map(asFlowItem)];
   const expenses: FlowLike[] = [...s.expenses, ...flowEvents.filter((e) => e.direction === "out").map(asFlowItem)];
@@ -145,7 +225,7 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   // d'abord (ventes, rentrées, emprunts) puis SORT (remboursements, achats).
   const EVENT_ORDER: Record<PlannedEvent["kind"], number> = { flow: -1, sell: 0, cash: 1, loan: 2, repay: 3, buy: 4, deposit: 5 };
   const plannedByYear = new Map<number, Exclude<PlannedEvent, FlowEvent>[]>();
-  for (const ev of s.events ?? []) {
+  for (const ev of allEvents) {
     if (ev.disabled || ev.kind === "flow") continue;
     const y = eventYear(ev, milestones);
     if (ev.when && refYear(ev.when, milestones) === null) {
@@ -169,6 +249,16 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   // bornes effectives des flux (ancrages jalon résolus UNE fois : ils sont fixes)
   const incomeBounds = incomes.map((it) => flowBounds(it, milestones));
   const expenseBounds = expenses.map((it) => flowBounds(it, milestones));
+
+  // année de référence de la revalorisation, en index depuis startYear :
+  //  - défaut (montant en euros d'aujourd'hui) : 0 → la croissance compose depuis aujourd'hui,
+  //    donc un flux futur « vaut » le montant saisi en euros CONSTANTS dès son début ;
+  //  - `nominal` (montant nominal à la date de début) : l'index du début → la croissance
+  //    compose depuis le début, donc le 1er versement = le montant saisi, nominal.
+  const refIndex = (it: FlowLike, b: { start?: number }) =>
+    it.nominal && b.start != null ? Math.max(0, b.start - startYear) : 0;
+  const incomeRef = incomes.map((it, k) => refIndex(it, incomeBounds[k]));
+  const expenseRef = expenses.map((it, k) => refIndex(it, expenseBounds[k]));
 
   // les actifs achetés et emprunts contractés par événement sont pré-créés INACTIFS
   // (tableaux de taille fixe : les accumulateurs annuels restent alignés)
@@ -263,10 +353,18 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
     // patrimoine net, sauf frais (eventFees) et PV réalisée (eventGain).
     let evCash = 0, evFees = 0, evGain = 0;
     const evDetails: EventDetail[] = [];
+    // Par défaut les montants d'événements sont en euros D'AUJOURD'HUI : on les projette à
+    // leur année par l'inflation (facteur (1+inflation)^i) — en affichage « euros constants »
+    // (realTerms) la déflation finale les ramène au montant saisi (un don de 150 k€ en 2050
+    // reste 150 k€ réels). Un événement marqué `nominal` prend son montant tel quel (euros
+    // courants à la date) → facteur 1. Exceptions inchangées : prix de vente ABSENT = valeur
+    // projetée, remboursement TOTAL = solde effectif ; taux/durée d'un emprunt jamais indexés.
+    const inflAt = (nominal: boolean | undefined) => (nominal ? 1 : Math.pow(1 + inflation / 100, i));
     for (const ev of plannedByYear.get(i) ?? []) {
       let cash = 0, fees = 0, gain = 0;
+      const evInfl = inflAt(ev.nominal);
       if (ev.kind === "cash") {
-        cash = ev.amount || 0;
+        cash = (ev.amount || 0) * evInfl;
         savings += cash;
         evCash += cash;
       } else if (ev.kind === "sell") {
@@ -276,7 +374,8 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
           continue;
         }
         const projVal = assets[k].val;
-        const priceUsed = ev.price ?? projVal;
+        // prix fixé = euros d'aujourd'hui indexés ; absent = valeur projetée de l'actif
+        const priceUsed = ev.price != null ? ev.price * evInfl : projVal;
         fees = priceUsed * ((ev.feesPct ?? 0) / 100);
         gain = priceUsed - projVal;
         assets[k].active = false;
@@ -286,11 +385,12 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
         evFees += fees; evGain += gain;
       } else if (ev.kind === "loan") {
         const L = loans.find((l) => l.id === ev.id)!;
-        L.balance = ev.amount || 0;
-        L.payment = monthlyPayment(ev.amount || 0, ev.rate || 0, ev.termMonths);
+        L.balance = (ev.amount || 0) * evInfl;
+        L.payment = monthlyPayment(L.balance, ev.rate || 0, ev.termMonths);
+        L.insurance = (ev.insurance || 0) * evInfl;
         L.paid = 0;
         L.ended = L.balance <= EPS || L.payment <= 0;
-        cash = ev.amount || 0;
+        cash = L.balance;
         savings += cash;
       } else if (ev.kind === "repay") {
         const L = loans.find((l) => l.id === ev.loanId);
@@ -298,7 +398,9 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
           warnings.push({ year, label: `« ${ev.label} » ignoré : emprunt introuvable ou déjà soldé` });
           continue;
         }
-        const amt = Math.min(ev.amount ?? L.balance, L.balance);
+        // montant partiel indexé ; absent = solde total effectif (déjà nominal)
+        const req = ev.amount != null ? ev.amount * evInfl : L.balance;
+        const amt = Math.min(req, L.balance);
         L.balance -= amt;
         if (L.balance <= EPS) L.ended = true;
         cash = -amt;
@@ -307,9 +409,9 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
         const k = assets.findIndex((x) => x.id === ev.asset.id);
         if (k < 0 || assets[k].active) continue;
         assets[k].active = true;
-        assets[k].val = ev.price || 0;
-        fees = ev.fees || 0;
-        cash = -((ev.price || 0) + fees);
+        assets[k].val = (ev.price || 0) * evInfl;
+        fees = (ev.fees || 0) * evInfl;
+        cash = -(assets[k].val + fees);
         savings += cash;
         evFees += fees;
       } else if (ev.kind === "deposit") {
@@ -319,8 +421,9 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
           continue;
         }
         // transfert neutre épargne → actif, dans la limite du plafond de versements
-        const amt = Math.min(ev.amount || 0, capLeftByAsset[k]);
-        if (amt < (ev.amount || 0) - EPS) {
+        const req = (ev.amount || 0) * evInfl;
+        const amt = Math.min(req, capLeftByAsset[k]);
+        if (amt < req - EPS) {
           warnings.push({ year, label: `« ${ev.label} » plafonné : ${Math.round(amt)} € versés (plafond de versements atteint)` });
         }
         capLeftByAsset[k] -= amt;
@@ -339,10 +442,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       }
     }
 
-    const incFactor = (it: { growth?: number }) => flowFactor(it.growth, indexIncomes, i);
-    const expFactor = (it: { growth?: number }) => flowFactor(it.growth, indexExpenses, i);
-    const incMonthly = incomes.map((it, k) => (isActiveYear(incomeBounds[k].start, incomeBounds[k].end, year) ? toMonthly(it) * incFactor(it) : 0));
-    const expMonthly = expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * expFactor(it) : 0));
+    // revalorisation composée depuis l'année de référence du flux (aujourd'hui par défaut,
+    // ou le début du flux si le montant est saisi en euros courants — cf. incomeRef/expenseRef)
+    const incMonthly = incomes.map((it, k) => (isActiveYear(incomeBounds[k].start, incomeBounds[k].end, year) ? toMonthly(it) * flowFactor(it.growth, indexIncomes, i - incomeRef[k]) : 0));
+    const expMonthly = expenses.map((it, k) => (isActiveYear(expenseBounds[k].start, expenseBounds[k].end, year) ? toMonthly(it) * flowFactor(it.growth, indexExpenses, i - expenseRef[k]) : 0));
     const amountIncFactor = flowFactor(undefined, indexIncomes, i);
     const chargesFactor = flowFactor(undefined, indexExpenses, i);
 

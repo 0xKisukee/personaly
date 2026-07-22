@@ -3,11 +3,26 @@
  * bascule de type, listes d'actifs/emprunts référençables et résumé lisible.
  * Partagé par EventsView (liste) et EventModal (édition).
  */
-import type { AssetCategory, Milestone, PlannedEvent } from "../../lib/types";
+import type { AssetCategory, Milestone, PlannedEvent, Recurrence } from "../../lib/types";
 import { canReceiveDeposits, eventYear } from "../../lib/types";
 import { assetLabel } from "../../lib/assets";
 import { money, signedMoney, percent, uid, whenLabel } from "../../lib/format";
 import { formatDuration } from "../../lib/finance";
+
+/** Récurrence par défaut proposée quand on active « Répéter » (achat/cash). */
+export const DEFAULT_RECURRENCE: Recurrence = { everyYears: 10, keepLast: true };
+
+/** Types récurrables : achat (remplacement) + flux « neufs » à montant répété
+ *  (rentrée/sortie, versement, emprunt). Pas de récurrence pour vente/remboursement
+ *  (ils ciblent un actif/emprunt précis) ni pour le flux (déjà récurrent par nature). */
+export const RECURRABLE: PlannedEvent["kind"][] = ["buy", "cash", "deposit", "loan"];
+
+/** Résumé lisible d'une récurrence, pour la liste des événements. */
+export function recurrenceSummary(r: Recurrence, milestones: Milestone[]): string {
+  const until = whenLabel(r.untilYear, r.untilRef, milestones);
+  const scale = r.scaling ? `, ${r.scaling > 0 ? "+" : ""}${percent(r.scaling)}/fois` : "";
+  return `↻ tous les ${r.everyYears} ans${scale}${until ? ` jusqu'à ${until}` : ""}`;
+}
 
 export const EVENT_KINDS: { id: PlannedEvent["kind"]; label: string }[] = [
   { id: "flow", label: "Flux récurrent" },
@@ -33,7 +48,10 @@ export const emptyEvent = (year: number): PlannedEvent => ({
 
 /** Bascule le type d'un brouillon en conservant id / libellé / date. */
 export function switchKind(ev: PlannedEvent, kind: PlannedEvent["kind"], s: AppStateLike): PlannedEvent {
-  const base = { id: ev.id, label: ev.label, year: ev.year, when: ev.when };
+  // la récurrence ne se conserve qu'entre types récurrables (achat ↔ cash) ; sinon elle tombe.
+  // le mode d'indexation (nominal) se conserve pour TOUS les types (flux compris).
+  const recurrence = RECURRABLE.includes(kind) ? ev.recurrence : undefined;
+  const base = { id: ev.id, label: ev.label, year: ev.year, when: ev.when, recurrence, nominal: ev.nominal };
   switch (kind) {
     case "flow": return { ...base, kind, direction: "out", amount: 0, period: "monthly" };
     case "cash": return { ...base, kind, amount: 0 };

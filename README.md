@@ -154,6 +154,24 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   le net, sauf frais (`eventFees`), plus-value réalisée (`eventGain`) et rentrées/sorties
   (`eventCash`). `disabled` exclut sans supprimer. Un cas inapplicable → **warning** (jamais
   d'annulation silencieuse).
+- **Euros constants vs courants** (`nominal?` sur **tout** événement) : par **défaut** un montant est en
+  **euros d'aujourd'hui** — le moteur l'**indexe sur l'inflation** jusqu'à l'année de l'événement
+  (`evInfl`), donc un don de 150 k€ en 2050 = 150 k€ de pouvoir d'achat actuel (plus élevé nominalement,
+  stable en euros constants). `nominal:true` = valeur **nominale** telle quelle à la date. Exceptions non
+  indexées : prix de vente **absent** (= valeur projetée), remboursement **total**, taux/durée d'un emprunt.
+  Pour un **flux** (`flow`), `nominal` change l'**année de référence de la revalorisation** : par défaut
+  elle compose depuis **aujourd'hui** (le montant est en euros constants dès un début futur) ; en `nominal`,
+  depuis le **début du flux** (le 1er versement = le montant saisi, nominal — ex. « pension de 2 000 €
+  nominaux en 2050 »). Détail crucial pour un flux qui **démarre dans le futur**.
+- **Récurrence** (`Recurrence` sur `buy`/`cash`/`deposit`/`loan`) : répète un événement à
+  intervalle régulier. Le moteur ne fait pas de récurrence « vivante » — il **déplie** le motif
+  en instances atomiques datées **avant** la simulation (`expandRecurring`), donc les invariants
+  tiennent sans cas spécial. `buy` = **remplacement** (chaque échéance revend l'exemplaire précédent
+  à sa valeur projetée, puis achète un neuf — « changer de voiture tous les 10 ans » ; `keepLast`
+  garde la dernière) ; `cash`/`deposit`/`loan` = **répétition** du montant. Le dépliage n'applique que
+  le `scaling` (réévaluation **réelle**) ; l'inflation de chaque instance vient du moteur (`evInfl`,
+  selon `nominal`). Instances éditables depuis le graphe (id dérivé `${id}~k` tronqué pour retrouver
+  le motif source).
 
 ---
 
@@ -288,8 +306,8 @@ optionnel (la projection principale reste déterministe).
 - **Onboarding** (wizard état vide → 1re projection) + **mode démo complet** (persona sandboxé,
   backup/restore non destructif via `loadState`) + **visite guidée**. Reporté délibérément :
   guider vers des écrans encore mouvants serait à refaire. Cadrage détaillé dans l'historique git.
-- Pistes moteur : scénarios d'hypothèses nommés, récurrence d'événements, fiscalité française
-  optionnelle (vrai différenciateur).
+- Pistes moteur : scénarios d'hypothèses nommés, fiscalité française optionnelle (vrai
+  différenciateur).
 
 ---
 

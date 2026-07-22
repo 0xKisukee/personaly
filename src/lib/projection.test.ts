@@ -521,6 +521,218 @@ describe("événements datés", () => {
   });
 });
 
+/* ---------------------------- récurrence ---------------------------- */
+
+describe("récurrence d'événements", () => {
+  it("cash récurrent : une instance à chaque intervalle, jusqu'à l'horizon", () => {
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Prime", year: Y, amount: 10_000, recurrence: { everyYears: 3 } }],
+    });
+    const r = project(s, params({ horizon: 10 }));
+    // instances en Y, Y+3, Y+6, Y+9
+    [0, 3, 6, 9].forEach((i) => expect(r.points[i].eventCash).toBe(10_000));
+    [1, 2, 4, 5, 7, 8, 10].forEach((i) => expect(r.points[i].eventCash).toBe(0));
+    expect(last(r).savings).toBeCloseTo(40_000, 4);
+    checkInvariants(r);
+  });
+
+  it("scaling : chaque instance ajustée de (1+scaling)^k, cumulatif", () => {
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Prime", year: Y, amount: 10_000, recurrence: { everyYears: 2, scaling: 10 } }],
+    });
+    const r = project(s, params({ horizon: 4 }));
+    expect(r.points[0].eventCash).toBeCloseTo(10_000, 4);
+    expect(r.points[2].eventCash).toBeCloseTo(11_000, 4); // ×1.1
+    expect(r.points[4].eventCash).toBeCloseTo(12_100, 4); // ×1.1^2
+    checkInvariants(r);
+  });
+
+  it("euros constants : montant saisi en euros d'AUJOURD'HUI, stable en réel à chaque instance", () => {
+    // récurrence qui DÉMARRE dans le futur (Y+4) : le piège corrigé — la 1re instance
+    // doit valoir 20 000 € RÉELS (pas 20 000 nominaux déflatés en ~15 000)
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Voiture", year: Y + 4, amount: 20_000, recurrence: { everyYears: 10 } }],
+    });
+    const nominal = project(s, params({ horizon: 20, inflation: 2 }));
+    // nominal : indexé sur l'inflation depuis aujourd'hui, y compris la 1re instance
+    expect(nominal.points[4].eventCash).toBeCloseTo(20_000 * 1.02 ** 4, 2);
+    expect(nominal.points[14].eventCash).toBeCloseTo(20_000 * 1.02 ** 14, 2);
+    // en euros constants : 20 000 € PARTOUT (1re instance comprise)
+    const real = project(s, params({ horizon: 20, inflation: 2, realTerms: true }));
+    expect(real.points[4].eventCash).toBeCloseTo(20_000, 2);
+    expect(real.points[14].eventCash).toBeCloseTo(20_000, 2);
+    checkInvariants(nominal);
+  });
+
+  it("scaling s'ajoute PAR-DESSUS l'inflation", () => {
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Voiture", year: Y, amount: 20_000, recurrence: { everyYears: 10, scaling: 5 } }],
+    });
+    const r = project(s, params({ horizon: 12, inflation: 2 }));
+    // instance k=1 : × inflation^10 × (1+scaling)^1
+    expect(r.points[10].eventCash).toBeCloseTo(20_000 * 1.02 ** 10 * 1.05, 2);
+    checkInvariants(r);
+  });
+
+  it("until : aucune instance créée après l'année d'arrêt", () => {
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Prime", year: Y, amount: 5_000, recurrence: { everyYears: 2, untilYear: Y + 4 } }],
+    });
+    const r = project(s, params({ horizon: 10 }));
+    // Y, Y+2, Y+4 seulement (pas Y+6…)
+    expect(r.points.filter((p) => p.eventCash > 0).map((p) => p.yearIndex)).toEqual([0, 2, 4]);
+    checkInvariants(r);
+  });
+
+  it("until ancré sur un jalon : recalé quand le jalon bouge", () => {
+    const mk = (retYear: number) => state({
+      milestones: [{ id: "ret", label: "Retraite", year: retYear }],
+      events: [{ id: "c", kind: "cash", label: "Prime", year: Y, amount: 5_000, recurrence: { everyYears: 2, untilRef: { milestoneId: "ret" } } }],
+    });
+    const early = project(mk(Y + 3), params({ horizon: 10 }));
+    const late = project(mk(Y + 7), params({ horizon: 10 }));
+    expect(early.points.filter((p) => p.eventCash > 0).map((p) => p.yearIndex)).toEqual([0, 2]);
+    expect(late.points.filter((p) => p.eventCash > 0).map((p) => p.yearIndex)).toEqual([0, 2, 4, 6]);
+  });
+
+  it("achat récurrent = remplacement : l'exemplaire précédent est revendu, pas d'accumulation", () => {
+    // voiture 20 000 € qui se déprécie de 15 %/an, remplacée tous les 5 ans
+    const car = asset({ id: "car", label: "Voiture", category: "vehicule", growthRate: -15 });
+    const s = state({
+      assets: [asset({ id: "cash", value: 200_000 })], // de quoi financer
+      events: [{ id: "b", kind: "buy", label: "Voiture", year: Y, price: 20_000, asset: car, recurrence: { everyYears: 5, keepLast: true } }],
+    });
+    const r = project(s, params({ horizon: 12 }));
+    // pas d'accumulation : on ne détient qu'UNE voiture à la fois (≤ prix neuf),
+    // donc le brut ne dépasse jamais cash (200k) + une voiture (≤ 20k)
+    for (const p of r.points) expect(p.grossAssets).toBeLessThanOrEqual(221_000);
+    // trois achats : Y, Y+5, Y+10
+    expect(r.events.filter((e) => e.kind === "planned" && e.label === "Voiture")).toHaveLength(3);
+    checkInvariants(r);
+  });
+
+  it("achat récurrent : keepLast=false revend la dernière à l'échéance suivante", () => {
+    const car = asset({ id: "car", label: "Voiture", category: "vehicule", growthRate: -10, valueFloor: 2_000 });
+    const s = state({
+      assets: [asset({ id: "cash", value: 200_000 })],
+      events: [{ id: "b", kind: "buy", label: "Voiture", year: Y, price: 20_000, asset: car, recurrence: { everyYears: 5, untilYear: Y + 5, keepLast: false } }],
+    });
+    const r = project(s, params({ horizon: 12 }));
+    // achats Y et Y+5 ; la dernière revendue en Y+10 → plus aucune voiture ensuite
+    expect(last(r).detail.assets.filter((a) => a.id.startsWith("car"))).toHaveLength(0);
+    expect(last(r).grossAssets).toBeCloseTo(r.points.find((p) => p.year === Y)!.grossAssets - 0, -3); // n'explose pas
+    checkInvariants(r);
+  });
+
+  it("versement récurrent : répété, plafond de versements respecté instance après instance", () => {
+    const s = state({
+      assets: [asset({ id: "pea", value: 0, depositCap: 25_000 })],
+      events: [
+        { id: "c", kind: "cash", label: "Apport", year: Y, amount: 100_000 },
+        { id: "d", kind: "deposit", label: "PEA annuel", year: Y, assetId: "pea", amount: 10_000, recurrence: { everyYears: 2 } },
+      ],
+    });
+    const r = project(s, params({ horizon: 8 }));
+    // instances en Y, Y+2, Y+4… mais total versé plafonné à 25 000
+    expect(r.points.reduce((t, p) => t + p.deposited, 0)).toBeCloseTo(25_000, 4);
+    expect(r.warnings.some((w) => w.label.includes("plafonné"))).toBe(true);
+    checkInvariants(r);
+  });
+
+  it("emprunt récurrent : un nouveau prêt à chaque intervalle, chacun s'amortit", () => {
+    const s = state({
+      events: [{ id: "ln", kind: "loan", label: "Prêt auto", year: Y, amount: 20_000, rate: 3, termMonths: 60, recurrence: { everyYears: 6 } }],
+    });
+    const r = project(s, params({ horizon: 12 }));
+    // trois emprunts contractés : Y, Y+6, Y+12
+    expect(r.events.filter((e) => e.kind === "planned" && e.label === "Prêt auto")).toHaveLength(3);
+    // chacun s'éteint (marqueur de fin) — au moins les deux premiers dans l'horizon
+    expect(r.events.filter((e) => e.kind === "loan" && e.label.startsWith("Fin")).length).toBeGreaterThanOrEqual(2);
+    checkInvariants(r);
+  });
+
+  it("désactivé : la récurrence ne se déplie pas", () => {
+    const s = state({
+      events: [{ id: "c", kind: "cash", label: "Prime", year: Y, amount: 10_000, disabled: true, recurrence: { everyYears: 2 } }],
+    });
+    const r = project(s, params({ horizon: 6 }));
+    expect(r.points.every((p) => p.eventCash === 0)).toBe(true);
+    expect(r.events).toHaveLength(0);
+  });
+});
+
+/* ------------------ euros constants vs courants (par événement) ------------------ */
+
+describe("montant en euros constants vs courants", () => {
+  it("défaut (euros constants) : un cash ponctuel est indexé sur l'inflation à son année", () => {
+    const s = state({ events: [{ id: "e", kind: "cash", label: "Don", year: Y + 3, amount: 150_000 }] });
+    const nominal = project(s, params({ horizon: 5, inflation: 2 }));
+    expect(nominal.points[3].eventCash).toBeCloseTo(150_000 * 1.02 ** 3, 2); // nominal indexé
+    const real = project(s, params({ horizon: 5, inflation: 2, realTerms: true }));
+    expect(real.points[3].eventCash).toBeCloseTo(150_000, 2); // 150 k€ RÉELS
+    checkInvariants(nominal);
+  });
+
+  it("nominal:true (euros courants) : le montant est pris tel quel, non indexé", () => {
+    const s = state({ events: [{ id: "e", kind: "cash", label: "Don", year: Y + 3, amount: 150_000, nominal: true }] });
+    const r = project(s, params({ horizon: 5, inflation: 2 }));
+    expect(r.points[3].eventCash).toBe(150_000); // brut, pas d'indexation
+    const real = project(s, params({ horizon: 5, inflation: 2, realTerms: true }));
+    expect(real.points[3].eventCash).toBeCloseTo(150_000 / 1.02 ** 3, 2); // déflaté → vaut moins en réel
+    checkInvariants(r);
+  });
+
+  it("achat : prix + frais en euros constants par défaut (valeur d'entrée indexée)", () => {
+    const s = state({
+      events: [{ id: "b", kind: "buy", label: "Studio", year: Y + 2, price: 100_000, fees: 8_000, asset: asset({ id: "st", category: "immobilier" }) }],
+      incomes: [{ id: "i", label: "S", category: "salaire", amount: 6_000, period: "monthly" }],
+    });
+    const r = project(s, params({ horizon: 5, inflation: 2 }));
+    expect(r.points[2].eventFees).toBeCloseTo(8_000 * 1.02 ** 2, 2);
+    expect(r.points[3].detail.assets.find((a) => a.id === "st")!.value).toBeCloseTo(100_000 * 1.02 ** 2, 0);
+    checkInvariants(r);
+  });
+
+  it("flux futur en euros constants (défaut) : indexé depuis AUJOURD'HUI (réel stable dès le début)", () => {
+    // pension de 2 000 €/mois qui démarre dans 10 ans, suit l'inflation (revalo vide)
+    const s = state({
+      events: [{ id: "f", kind: "flow", label: "Pension", direction: "in", amount: 2_000, period: "monthly", year: Y + 10 }],
+    });
+    const r = project(s, params({ horizon: 12, inflation: 2, indexIncomes: true }));
+    // 1re année active (Y+10) : montant nominal = 2 000 × 1.02^10 (composé depuis aujourd'hui)
+    expect(r.points[10].extra).toBeCloseTo(2_000 * 12 * 1.02 ** 10, 0);
+    // en euros constants : 2 000 €/mois réels dès le début
+    const real = project(s, params({ horizon: 12, inflation: 2, indexIncomes: true, realTerms: true }));
+    expect(real.points[10].extra).toBeCloseTo(2_000 * 12, 0);
+    checkInvariants(r);
+  });
+
+  it("flux futur en euros courants (nominal) : montant nominal à la date de DÉBUT", () => {
+    const s = state({
+      events: [{ id: "f", kind: "flow", label: "Pension", direction: "in", amount: 2_000, period: "monthly", year: Y + 10, nominal: true }],
+    });
+    const r = project(s, params({ horizon: 12, inflation: 2, indexIncomes: true }));
+    // 1re année active : 2 000 € NOMINAUX (référence = début du flux, pas aujourd'hui)
+    expect(r.points[10].extra).toBeCloseTo(2_000 * 12, 0);
+    // l'année suivante, la revalo compose depuis le début → 2 000 × 1.02
+    expect(r.points[11].extra).toBeCloseTo(2_000 * 12 * 1.02, 0);
+    checkInvariants(r);
+  });
+
+  it("emprunt : capital en euros constants par défaut (nominal:true = tel quel)", () => {
+    const mk = (nominal?: boolean) => state({
+      events: [{ id: "ln", kind: "loan", label: "Prêt", year: Y + 2, amount: 100_000, rate: 3, termMonths: 240, nominal }],
+    });
+    const idx = project(mk(), params({ horizon: 4, inflation: 2 }));
+    const raw = project(mk(true), params({ horizon: 4, inflation: 2 }));
+    // même prêt, capital indexé vs nominal → dettes proportionnelles au facteur d'inflation
+    expect(idx.points[3].debt).toBeGreaterThan(0);
+    expect(idx.points[3].debt / raw.points[3].debt).toBeCloseTo(1.02 ** 2, 4);
+    checkInvariants(idx);
+    checkInvariants(raw);
+  });
+});
+
 /* ------------------------- inflation & euros constants ------------------------- */
 
 describe("inflation & euros constants", () => {

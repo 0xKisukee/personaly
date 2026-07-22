@@ -122,7 +122,10 @@ export default function ProjectionPage() {
     updatePlan((pl) => ({ ...pl, events: pl.events.map((x) => (x.id === id ? { ...x, disabled: !x.disabled } : x)) }));
   const sortedEvents = [...plan.events].sort((a, b) => eventYear(a, milestones) - eventYear(b, milestones));
   const editEvent = (id: string) => {
-    const ev = plan.events.find((x) => x.id === id);
+    // les instances d'un événement récurrent portent un id dérivé (`${id}~…`) :
+    // on tronque après le `~` pour retrouver et éditer le motif source.
+    const srcId = id.split("~")[0];
+    const ev = plan.events.find((x) => x.id === srcId);
     if (ev) setEvDraft({ ...ev });
   };
 

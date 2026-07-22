@@ -4,7 +4,7 @@ import { ASSET_CATEGORIES, assetLabel } from "../../lib/assets";
 import Modal from "../../components/Modal";
 import WhenPicker from "../../components/WhenPicker";
 import {
-  type AppStateLike, EVENT_KINDS, switchKind,
+  type AppStateLike, EVENT_KINDS, switchKind, RECURRABLE, DEFAULT_RECURRENCE,
   sellableAssets, repayableLoans, depositableAssets,
 } from "./eventHelpers";
 
@@ -274,6 +274,100 @@ export default function EventModal({ draft, s, onChange, onSave, onClose }: {
                 onChange={(e) => set({ amount: e.target.value ? Number(e.target.value) : undefined })} />
             </div>
             <span className="help span-2">Prélevé sur l'épargne à la date ; neutre pour le patrimoine (la dette baisse d'autant).</span>
+          </>
+        )}
+
+        <div className="divider span-2" style={{ margin: "4px 0" }} />
+        <div className="field span-2">
+          <label>Montant exprimé en</label>
+          <div className="segment">
+            <button data-on={!draft.nominal} onClick={() => set({ nominal: undefined })}>Euros constants (aujourd'hui)</button>
+            <button data-on={!!draft.nominal} onClick={() => set({ nominal: true })}>
+              {draft.kind === "flow" ? "Euros courants (au début)" : "Euros courants (à la date)"}
+            </button>
+          </div>
+        </div>
+        <span className="help span-2">
+          {draft.kind === "flow" ? (
+            <><b>Euros constants</b> : le montant est en pouvoir d'achat d'aujourd'hui ; la revalorisation compose
+            depuis <b>aujourd'hui</b>, donc un flux qui démarre plus tard vaut déjà ce montant en euros réels à son
+            début. <b>Euros courants</b> : le montant est nominal l'<b>année où le flux commence</b>, puis la
+            revalorisation compose à partir de là (ex. « pension de 2 000 € nominaux en 2050 »). Sans effet si la
+            revalorisation est à 0.</>
+          ) : (
+            <><b>Euros constants</b> : le montant est en pouvoir d'achat d'aujourd'hui — le moteur l'<b>indexe sur
+            l'inflation</b> jusqu'à l'année de l'événement (150 k€ en 2050 = 150 k€ d'aujourd'hui, plus élevés
+            nominalement). <b>Euros courants</b> : le montant est la valeur <b>nominale</b> telle quelle à la date.
+            En affichage « euros constants », les deux se rejoignent.</>
+          )}
+        </span>
+
+        {RECURRABLE.includes(draft.kind) && (
+          <>
+            <div className="divider span-2" style={{ margin: "4px 0" }} />
+            <div className="field span-2">
+              <label>Récurrence</label>
+              <div className="segment">
+                <button data-on={!draft.recurrence} onClick={() => set({ recurrence: undefined })}>Ponctuel</button>
+                <button data-on={!!draft.recurrence} onClick={() => set({ recurrence: draft.recurrence ?? { ...DEFAULT_RECURRENCE } })}>Répéter</button>
+              </div>
+            </div>
+
+            {draft.recurrence && (
+              <>
+                <div className="field">
+                  <label>Intervalle (ans)</label>
+                  <input className="input mono" type="number" min={1} step={1} placeholder="ex. 10"
+                    value={draft.recurrence.everyYears || ""}
+                    onChange={(e) => set({ recurrence: { ...draft.recurrence!, everyYears: Math.max(1, Math.round(Number(e.target.value))) } })} />
+                </div>
+                <div className="field">
+                  <label>Ajustement réel (%/fois)</label>
+                  <input className="input mono" type="number" step="0.1" placeholder="en plus de l'inflation"
+                    value={draft.recurrence.scaling ?? ""}
+                    onChange={(e) => set({ recurrence: { ...draft.recurrence!, scaling: e.target.value !== "" ? Number(e.target.value) : undefined } })} />
+                </div>
+                <div className="field span-2">
+                  <label>Jusqu'à</label>
+                  <WhenPicker
+                    milestones={s.milestones}
+                    allowEmpty
+                    emptyLabel="Jusqu'à l'horizon"
+                    value={{ year: draft.recurrence.untilYear, ref: draft.recurrence.untilRef }}
+                    onChange={(v) => set({ recurrence: { ...draft.recurrence!, untilYear: v.year, untilRef: v.ref } })}
+                  />
+                </div>
+                {draft.kind === "buy" && (
+                  <div className="field span-2">
+                    <label>Dernière instance</label>
+                    <div className="segment">
+                      <button data-on={draft.recurrence.keepLast !== false} onClick={() => set({ recurrence: { ...draft.recurrence!, keepLast: true } })}>Conserver</button>
+                      <button data-on={draft.recurrence.keepLast === false} onClick={() => set({ recurrence: { ...draft.recurrence!, keepLast: false } })}>Revendre à terme</button>
+                    </div>
+                  </div>
+                )}
+                <span className="help span-2">
+                  {draft.kind === "buy" ? (
+                    <>Répète l'<b>achat</b> à intervalle régulier : à chaque échéance l'exemplaire précédent est
+                    <b> revendu</b> (à sa valeur projetée, neutre) et un neuf acheté — idéal pour « changer de voiture
+                    tous les 10 ans ». Pour un achat <b>à crédit</b> répété, ajoute un <b>Emprunt</b> récurrent de même
+                    cadence. <b>Ajustement</b> = prix un peu plus élevé (ou bas) à chaque fois.</>
+                  ) : draft.kind === "deposit" ? (
+                    <>Répète ce <b>versement</b> vers l'actif à intervalle régulier (ex. 5 000 € sur le PEA chaque année).
+                    Le <b>plafond de versements</b> reste respecté, instance après instance.
+                    <b> Ajustement</b> = montant modulé à chaque fois.</>
+                  ) : draft.kind === "loan" ? (
+                    <>Répète ce <b>nouvel emprunt</b> à intervalle régulier (souvent couplé à un <b>Achat</b> récurrent de
+                    même cadence pour financer chaque remplacement). <b>Ajustement</b> = capital modulé à chaque fois.</>
+                  ) : (
+                    <>Répète cette <b>rentrée / sortie</b> à intervalle régulier (ex. gros travaux tous les 15 ans).
+                    <b> Ajustement</b> = montant modulé à chaque répétition.</>
+                  )}{" "}L'<b>ajustement</b> est une réévaluation <b>réelle</b>, en plus de l'indexation choisie ci-dessus
+                  (euros constants → chaque instance suit l'inflation). Ancre <b>Jusqu'à</b> sur un jalon (Retraite…) pour
+                  arrêter au bon moment.
+                </span>
+              </>
+            )}
           </>
         )}
       </div>

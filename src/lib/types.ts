@@ -219,6 +219,38 @@ export interface ExpenseItem {
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
 }
 
+/* --------------------------- RÉCURRENCE --------------------------- */
+
+/**
+ * RÉCURRENCE d'un événement : répète un même événement à intervalle régulier
+ * (« acheter une voiture tous les 10 ans », « refaire la toiture tous les 15 ans »).
+ *
+ * Adaptée au modèle ATOMIQUE de l'app : le moteur ne fait pas de récurrence
+ * « vivante », il DÉPLIE le motif en instances datées AVANT la simulation
+ * (cf. `expandRecurring` dans projection.ts). Chaque instance reste un événement
+ * atomique ordinaire → tous les invariants structurels tiennent sans cas spécial.
+ *
+ * Disponible pour l'achat, la rentrée/sortie et le versement — le moteur doit savoir
+ * comment se joue chaque future instance :
+ *  - ACHAT : REMPLACEMENT — à chaque échéance l'instance précédente est revendue
+ *    (à sa valeur projetée → neutre) et une nouvelle est achetée.
+ *  - CASH / VERSEMENT : simple RÉPÉTITION du même flux (montant ajusté par le scaling).
+ */
+export interface Recurrence {
+  everyYears: number; // intervalle entre deux instances (années, ≥ 1)
+  /** Réévaluation RÉELLE du montant à chaque répétition (%/instance), EN PLUS de
+   *  l'inflation. Sauf `nominal:true`, le montant est en euros constants (le moteur
+   *  l'indexe sur l'inflation à l'année de chaque instance) ; `scaling` ajoute un vrai
+   *  changement de gamme par-dessus. Ex. +5 % = voiture un peu plus haut de gamme à chaque
+   *  fois. Instance k = montant × (1+scaling)^k, puis inflation appliquée par le moteur. */
+  scaling?: number;
+  untilYear?: number; // dernière année où une instance peut être créée (secours)
+  untilRef?: MilestoneRef; // arrêt ancré sur un jalon (PRIME sur untilYear)
+  /** ACHAT uniquement : garder la dernière instance (défaut). Sinon elle est
+   *  revendue à la fin de son cycle (échéance suivante). */
+  keepLast?: boolean;
+}
+
 /* --------------------------- ÉVÉNEMENTS --------------------------- */
 
 /**
@@ -243,6 +275,16 @@ interface EventBase {
   year: number; // instantané de secours si `when` est orphelin (jalon supprimé)
   when?: MilestoneRef; // ancrage jalon — PRIME sur `year` quand il se résout
   disabled?: boolean; // décoché = ignoré par la projection (l'événement reste saisi)
+  /** Montant saisi en euros COURANTS (nominaux, tels quels à la date) plutôt qu'en euros
+   *  CONSTANTS d'aujourd'hui. Par DÉFAUT (absent/false) le moteur indexe le montant sur
+   *  l'inflation jusqu'à l'année de l'événement (euros constants : un don de 150 k€ en 2050
+   *  = 150 k€ de pouvoir d'achat actuel). `nominal: true` le prend tel quel (le montant EST
+   *  la valeur nominale à la date). Sans effet sur un prix de vente absent (= valeur projetée)
+   *  ni sur un remboursement total. Le flux récurrent a sa propre indexation (indexIncomes/…). */
+  nominal?: boolean;
+  /** Répète l'événement à intervalle régulier (achat / cash / versement — cf. Recurrence).
+   *  Absent = événement ponctuel. Déplié en instances par le moteur. */
+  recurrence?: Recurrence;
   note?: string;
 }
 

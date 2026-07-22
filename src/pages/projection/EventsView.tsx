@@ -2,7 +2,7 @@ import type { Milestone, PlannedEvent } from "../../lib/types";
 import { whenLabel } from "../../lib/format";
 import MilestonesEditor from "../../components/MilestonesEditor";
 import { IconEdit, IconPlus, IconTrash } from "../../components/icons";
-import { type AppStateLike, eventSummary } from "./eventHelpers";
+import { type AppStateLike, eventSummary, recurrenceSummary } from "./eventHelpers";
 
 /** Vue Jalons & Événements : jalons GLOBAUX + jalons du plan + liste des événements. */
 export default function EventsView({
@@ -75,6 +75,11 @@ export default function EventsView({
                     {ev.when && "◇ "}{whenLabel(ev.year, ev.when, milestones)}
                   </span>
                   {" · "}<span>{eventSummary(ev, like)}</span>
+                  {ev.recurrence && (
+                    <span className="tag" style={{ borderColor: "var(--line-brass)", color: "var(--brass-bright)" }}>
+                      {recurrenceSummary(ev.recurrence, milestones)}
+                    </span>
+                  )}
                   {ev.disabled && <span className="tag" style={{ color: "var(--drain)" }}>désactivé</span>}
                 </div>
               </div>
