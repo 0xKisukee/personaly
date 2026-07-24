@@ -1,0 +1,36 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Personaly">
+  <defs>
+    <linearGradient id="brass" x1="16" y1="12" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e3c585"/>
+      <stop offset="0.55" stop-color="#cba96b"/>
+      <stop offset="1" stop-color="#9a8049"/>
+    </linearGradient>
+  </defs>
+
+  <!-- forest-ink tile -->
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="#0a0d0b"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="#cba96b" stroke-opacity="0.28" stroke-width="1.5"/>
+
+  <!-- serif "P" monogram -->
+  <path fill="url(#brass)" d="
+    M23.4 14.5
+    h13.1
+    c7.0 0 11.4 3.9 11.4 10.3
+    c0 6.6 -4.7 10.6 -12.1 10.6
+    h-6.3
+    v13.6
+    h5.2
+    v3.9
+    H23.4
+    v-3.9
+    h4.6
+    V18.4
+    h-4.6
+    Z
+    M29.5 18.4
+    v13.2
+    h5.7
+    c4.2 0 6.6 -2.4 6.6 -6.7
+    c0 -4.2 -2.4 -6.5 -6.7 -6.5
+    Z"/>
+</svg>

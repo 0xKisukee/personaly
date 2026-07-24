@@ -20,6 +20,8 @@ export default function DashboardPage() {
   const { state, update } = useStore();
   const navigate = useNavigate();
 
+  const birthYear = state.profile.birthDate ? new Date(state.profile.birthDate).getFullYear() : null;
+
   const gross = grossWealth(state);
   const liab = totalLiabilities(state);
   const net = netWealth(state);
@@ -179,6 +181,7 @@ export default function DashboardPage() {
               <div className="dash-plans">
                 {planPreviews.map(({ plan, points, events }) => {
                   const end = points[points.length - 1];
+                  const endAge = birthYear != null ? end.year - birthYear : null;
                   return (
                     <motion.div
                       key={plan.id}
@@ -195,7 +198,7 @@ export default function DashboardPage() {
                         <span className="dash-plan-name">{plan.name}</span>
                         {plan.id === state.activePlanId && <span className="tag tag-brass txt-brass">actif</span>}
                         <span className="spacer" />
-                        <span className="dash-plan-end">{money(end.netWorth)} <em>en {end.year}</em></span>
+                        <span className="dash-plan-end">{money(end.netWorth)} <em>{endAge != null ? `à ${endAge} ans` : `en ${end.year}`}</em></span>
                       </div>
                       <NetWorthChart points={points} events={events} milestones={planMilestones(state, plan)} mode="net" />
                     </motion.div>
