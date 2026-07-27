@@ -139,6 +139,19 @@ export interface Asset {
   depositCap?: number; // plafond de versements cumulés
   depositsMade?: number; // versements déjà effectués avant aujourd'hui (plafond restant = cap − made)
 
+  // 5. LIQUIDITÉ des revenus passifs (indépendance financière) — cf. IncomeItem.liquid.
+  //    Un revenu passif LIQUIDE compte dans le numérateur de l'indépendance (il couvre
+  //    réellement les dépenses). Deux flux distincts par actif :
+  //      • revenu DISTRIBUÉ (loyer, dividende) : du cash → LIQUIDE par défaut (incomeLiquid ≠ false).
+  //      • plus-value LATENTE (croissance) : illiquide par nature (immo qui s'apprécie) →
+  //        NE compte PAS par défaut, sauf `growthLiquid` (ex. assurance-vie/PEA revendables).
+  //    `liquidYear`/`liquidRef` : date de DÉBLOCAGE — avant elle, ni le distribué ni le latent
+  //    ne comptent (assurance-vie, placement bloqué). Absente = liquide immédiatement.
+  incomeLiquid?: boolean; // défaut true : le revenu distribué compte comme passif liquide
+  growthLiquid?: boolean; // défaut false : la plus-value latente compte comme passif liquide
+  liquidYear?: number; // année de déblocage (instantané de secours)
+  liquidRef?: MilestoneRef; // déblocage ancré sur un jalon (PRIME sur liquidYear)
+
   note?: string;
 }
 
@@ -221,6 +234,12 @@ export interface IncomeItem {
   startRef?: MilestoneRef;
   endRef?: MilestoneRef;
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
+  // LIQUIDITÉ pour l'indépendance financière : ce revenu compte-t-il comme revenu passif
+  // liquide (couvrant réellement les dépenses) ? Défaut false : l'utilisateur tague ce qui
+  // compte (un salaire tagué liquide compte s'il le décide ; une rente/pension typiquement).
+  liquid?: boolean;
+  liquidYear?: number; // année de déblocage — avant elle, ne compte pas même si liquid=true
+  liquidRef?: MilestoneRef; // déblocage ancré sur un jalon (PRIME sur liquidYear)
 }
 
 export interface ExpenseItem {
@@ -433,7 +452,6 @@ export interface ProjectionParams {
   // avant de laisser le déficit en épargne. Vide/absent = comportement actuel
   // (les déficits restent portés par l'épargne, qui peut passer en négatif).
   withdrawalTargets?: string[];
-  fiTarget?: number; // patrimoine net à atteindre pour l'indépendance financière (défini par l'utilisateur, pas déduit par le moteur)
 }
 
 export const DEFAULT_PROJECTION: ProjectionParams = {

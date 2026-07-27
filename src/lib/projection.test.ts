@@ -969,36 +969,74 @@ describe("inflation & euros constants", () => {
 
 /* --------------------- indépendance financière --------------------- */
 
-describe("indépendance financière (seuil utilisateur)", () => {
-  const s = state({
-    assets: [asset({ id: "pea", value: 50_000, growthRate: 7 })],
-    incomes: [{ id: "i", label: "S", category: "salaire", amount: 3_000, period: "monthly" }],
-    expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_800, period: "monthly" }],
-  });
-
-  it("marque la PREMIÈRE année où le patrimoine net atteint le seuil", () => {
-    const r = project(s, params({ horizon: 40, savingsYield: 4, fiTarget: 500_000 }));
-    expect(r.fiYearIndex).not.toBeNull();
-    const idx = r.fiYearIndex!;
-    expect(r.points[idx].netWorth).toBeGreaterThanOrEqual(500_000);
-    expect(r.points[idx - 1].netWorth).toBeLessThan(500_000);
+describe("indépendance financière (revenus passifs liquides couvrant les dépenses)", () => {
+  // loyer distribué = liquide par défaut ; couvre les dépenses -> FI dès l'année 0
+  it("revenu distribué liquide couvrant les dépenses : FI en année 0", () => {
+    const s = state({
+      assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 2_000, period: "monthly" } })],
+      expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_800, period: "monthly" }],
+    });
+    const r = project(s, params());
+    expect(r.fiYearIndex).toBe(0);
     expect(r.events.some((e) => e.kind === "fi")).toBe(true);
+    expect(r.points[0].liquidIncome).toBeGreaterThanOrEqual(r.points[0].needs);
   });
 
-  it("sans seuil : pas de FI déduite ; seuil inatteignable : null", () => {
-    expect(project(s, params({ horizon: 40 })).fiYearIndex).toBeNull();
-    expect(project(s, params({ horizon: 40, fiTarget: 1e9 })).fiYearIndex).toBeNull();
+  it("revenu distribué tagué illiquide : ne compte plus -> pas de FI", () => {
+    const s = state({
+      assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 2_000, period: "monthly" }, incomeLiquid: false })],
+      expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_800, period: "monthly" }],
+    });
+    expect(project(s, params()).fiYearIndex).toBeNull();
   });
 
-  it("en euros constants, le seuil se compare aux montants déflatés (FI plus tardive)", () => {
-    const nom = project(s, params({ horizon: 40, savingsYield: 4, inflation: 2, fiTarget: 500_000 }));
-    const real = project(s, params({ horizon: 40, savingsYield: 4, inflation: 2, fiTarget: 500_000, realTerms: true }));
-    expect(real.fiYearIndex!).toBeGreaterThan(nom.fiYearIndex!);
+  it("plus-value latente : illiquide par défaut, comptée si taguée liquide", () => {
+    const base = {
+      assets: [asset({ id: "av", value: 600_000, growthRate: 5 })],
+      expenses: [{ id: "e", label: "V", category: "vie_courante" as const, amount: 1_500, period: "monthly" as const }],
+    };
+    // par défaut la plus-value latente ne couvre rien
+    expect(project(state(base), params()).fiYearIndex).toBeNull();
+    // taguée liquide, la croissance (~30 k€/an) couvre 18 k€/an -> FI année 0
+    const liq = { ...base, assets: [asset({ id: "av", value: 600_000, growthRate: 5, growthLiquid: true })] };
+    expect(project(state(liq), params()).fiYearIndex).toBe(0);
   });
 
-  it("seuil déjà atteint aujourd'hui : FI en année 0", () => {
-    const rich = state({ assets: [asset({ value: 600_000 })] });
-    expect(project(rich, params({ fiTarget: 500_000 })).fiYearIndex).toBe(0);
+  it("date de déblocage : la plus-value ne compte qu'à partir de liquidYear (assurance-vie)", () => {
+    const s = state({
+      assets: [asset({ id: "av", value: 600_000, growthRate: 5, growthLiquid: true, liquidYear: Y + 5 })],
+      expenses: [{ id: "e", label: "V", category: "vie_courante", amount: 1_500, period: "monthly" }],
+    });
+    expect(project(s, params({ horizon: 10 })).fiYearIndex).toBe(5);
+  });
+
+  it("revenu manuel : compte seulement s'il est tagué liquide", () => {
+    const base = {
+      incomes: [{ id: "i", label: "Rente", category: "rente" as const, amount: 2_000, period: "monthly" as const }],
+      expenses: [{ id: "e", label: "V", category: "vie_courante" as const, amount: 1_800, period: "monthly" as const }],
+    };
+    expect(project(state(base), params()).fiYearIndex).toBeNull();
+    const liq = { ...base, incomes: [{ ...base.incomes[0], liquid: true }] };
+    expect(project(state(liq), params()).fiYearIndex).toBe(0);
+  });
+
+  it("les mensualités de prêt entrent dans les dépenses à couvrir", () => {
+    const s = state({
+      assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 2_000, period: "monthly" } })],
+      liabilities: [loan({ id: "l", outstanding: 200_000, rate: 3, termMonths: 240, monthlyPayment: monthlyPayment(200_000, 3, 240) })],
+    });
+    // loyer 24 k€/an < mensualités (~13,3 k€) — en réalité couvert : baissons le loyer pour vérifier l'inverse
+    const tight = state({
+      assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 1_000, period: "monthly" } })],
+      liabilities: [loan({ id: "l", outstanding: 200_000, rate: 3, termMonths: 240, monthlyPayment: monthlyPayment(200_000, 3, 240) })],
+    });
+    expect(project(s, params()).fiYearIndex).toBe(0); // 24 k€ ≥ mensualités
+    expect(project(tight, params()).fiYearIndex).toBeNull(); // 12 k€ < mensualités
+  });
+
+  it("sans dépense à couvrir : pas d'indépendance déclarée (évite le 0 ≥ 0 trivial)", () => {
+    const s = state({ assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 500, period: "monthly" } })] });
+    expect(project(s, params()).fiYearIndex).toBeNull();
   });
 });
 
@@ -1242,7 +1280,7 @@ describe("scénario complet (kitchen sink) : les invariants tiennent partout", (
     });
     const p = params({
       horizon: 25, inflation: 2, indexIncomes: true, indexExpenses: true,
-      savingsYield: 3, surplusTargets: maxFlows("livret", "pea"), fiTarget: 1_500_000,
+      savingsYield: 3, surplusTargets: maxFlows("livret", "pea"),
     });
 
     const r = project(s, p);

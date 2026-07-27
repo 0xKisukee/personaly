@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { useStore } from "../lib/store";
 import type {
+  Asset,
   ExpenseCategory,
   ExpenseItem,
   IncomeCategory,
@@ -50,6 +51,7 @@ import {
   IconHome,
   IconPlus,
   IconReceipt,
+  IconSettings,
   IconSparkle,
   IconTrash,
 } from "../components/icons";
@@ -90,6 +92,34 @@ const Liq = ({ kind }: { kind: "encaisse" | "latent" }) => (
   <span className={"liq liq-" + kind}>{kind === "encaisse" ? "encaissé" : "latent"}</span>
 );
 
+/** État édité par la modale de liquidité (indépendance financière). `save` mappe le flag
+ *  vers le bon champ (incomeLiquid / growthLiquid / liquid) selon la source du revenu. */
+interface LiqState {
+  title: string;
+  subtitle: string;
+  toggleLabel: string;
+  liquid: boolean;
+  liquidYear?: number;
+  liquidRef?: MilestoneRef;
+  save: (v: { liquid: boolean; liquidYear?: number; liquidRef?: MilestoneRef }) => void;
+}
+
+/** Pill cliquable indiquant si un revenu compte comme revenu passif liquide (et sa date de déblocage). */
+function LiqPill({ liquid, year, refv, milestones, onClick }: {
+  liquid: boolean; year?: number; refv?: MilestoneRef; milestones: Milestone[]; onClick: () => void;
+}) {
+  const w = liquid ? whenLabel(year, refv, milestones) : null;
+  const label = !liquid ? "Illiquide" : w ? `Liquide dès ${w}` : "Liquide";
+  return (
+    <button type="button" className="liq-edit" data-liquid={liquid}
+      onClick={onClick} title="Liquidité pour l'indépendance financière — cliquer pour modifier">
+      <span className="liq-edit-dot" />
+      {label}
+      <span className="liq-edit-ic"><IconSettings size={11} /></span>
+    </button>
+  );
+}
+
 /** Bornes d'un flux : ancrages jalon résolus, libellés « dès Retraite (2057) ». */
 function Bounds({ item, milestones }: {
   item: { startYear?: number; endYear?: number; startRef?: MilestoneRef; endRef?: MilestoneRef };
@@ -111,6 +141,7 @@ export default function FluxPage() {
   const [tab, setTab] = useState<"all" | "in" | "out">("all");
   const [incomeDraft, setIncomeDraft] = useState<IncomeItem | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseItem | null>(null);
+  const [liq, setLiq] = useState<LiqState | null>(null);
 
   const per = view === "monthly" ? "/ mois" : "/ an";
   const disp = (yearly: number) => (view === "monthly" ? yearly / 12 : yearly);
@@ -160,6 +191,31 @@ export default function FluxPage() {
     update((s) => ({ ...s, incomes: s.incomes.filter((x) => x.id !== id) }));
   const delExpense = (id: string) =>
     update((s) => ({ ...s, expenses: s.expenses.filter((x) => x.id !== id) }));
+  const saveAsset = (id: string, patch: Partial<Asset>) =>
+    update((s) => ({ ...s, assets: s.assets.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+
+  /* ouverture de la modale de liquidité selon la source du revenu */
+  const openAssetIncomeLiq = (a: Asset) => setLiq({
+    title: `Liquidité — ${a.label || "Revenu du patrimoine"}`,
+    subtitle: "Ce revenu distribué (loyer, dividende) est du cash : liquide par défaut. Il compte alors dans l'indépendance financière (couverture des dépenses).",
+    toggleLabel: "Compte comme revenu passif liquide",
+    liquid: a.incomeLiquid !== false, liquidYear: a.liquidYear, liquidRef: a.liquidRef,
+    save: (v) => saveAsset(a.id, { incomeLiquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
+  });
+  const openAssetGrowthLiq = (a: Asset) => setLiq({
+    title: `Liquidité — ${a.label || "Plus-value latente"}`,
+    subtitle: "La plus-value latente n'est pas encaissée : illiquide par défaut (un bien qui s'apprécie ne verse rien). Active-la pour une assurance-vie ou un placement revendable dont tu pourrais vivre.",
+    toggleLabel: "Plus-value latente liquide",
+    liquid: a.growthLiquid === true, liquidYear: a.liquidYear, liquidRef: a.liquidRef,
+    save: (v) => saveAsset(a.id, { growthLiquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
+  });
+  const openIncomeLiq = (it: IncomeItem) => setLiq({
+    title: `Liquidité — ${it.label || "Revenu"}`,
+    subtitle: "Ce revenu compte-t-il comme revenu passif liquide pour l'indépendance financière ? (un salaire, non ; une rente ou pension, oui).",
+    toggleLabel: "Compte comme revenu passif liquide",
+    liquid: it.liquid === true, liquidYear: it.liquidYear, liquidRef: it.liquidRef,
+    save: (v) => saveIncome({ ...it, liquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
+  });
 
   return (
     <>
@@ -279,6 +335,8 @@ export default function FluxPage() {
                   <div className="row-meta">
                     <span className="tag">depuis Patrimoine</span>
                     {asset.incomeMode === "rate" && <span>rendement distribué</span>}
+                    <LiqPill liquid={asset.incomeLiquid !== false} year={asset.liquidYear} refv={asset.liquidRef}
+                      milestones={state.milestones} onClick={() => openAssetIncomeLiq(asset)} />
                   </div>
                 </div>
                 <div className="row-val txt-gain">{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
@@ -310,7 +368,7 @@ export default function FluxPage() {
                   <div className="row-ic txt-gain"><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /><LiqPill liquid={it.liquid === true} year={it.liquidYear} refv={it.liquidRef} milestones={state.milestones} onClick={() => openIncomeLiq(it)} /></div>
                   </div>
                   <div className="row-val txt-gain">{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -343,6 +401,8 @@ export default function FluxPage() {
                   <div className="row-meta">
                     <span className="tag">depuis Patrimoine</span>
                     <span>valeur +{asset.growthRate} %/an · plus-value non encaissée</span>
+                    <LiqPill liquid={asset.growthLiquid === true} year={asset.liquidYear} refv={asset.liquidRef}
+                      milestones={state.milestones} onClick={() => openAssetGrowthLiq(asset)} />
                   </div>
                 </div>
                 <div className="row-val txt-sage">{signedMoney(disp(yearly))}<div className="flux zero">{per}</div></div>
@@ -512,7 +572,61 @@ export default function FluxPage() {
           onClose={() => setExpenseDraft(null)}
         />
       )}
+      {liq && (
+        <LiquidityModal liq={liq} milestones={state.milestones} onClose={() => setLiq(null)} />
+      )}
     </>
+  );
+}
+
+/* ----------------------- LIQUIDITY MODAL ----------------------- */
+/** Tag un revenu liquide/illiquide + date de déblocage (assurance-vie, placement bloqué). */
+function LiquidityModal({ liq, milestones, onClose }: {
+  liq: LiqState;
+  milestones: Milestone[];
+  onClose: () => void;
+}) {
+  const [liquid, setLiquid] = useState(liq.liquid);
+  const [when, setWhen] = useState<{ year?: number; ref?: MilestoneRef }>({ year: liq.liquidYear, ref: liq.liquidRef });
+
+  return (
+    <Modal open title={liq.title} subtitle={liq.subtitle} onClose={onClose}>
+      <div className="form-grid">
+        <div className="field span-2">
+          <label>{liq.toggleLabel}</label>
+          <div className="segment">
+            <button data-on={liquid} onClick={() => setLiquid(true)}>Liquide</button>
+            <button data-on={!liquid} onClick={() => setLiquid(false)}>Illiquide</button>
+          </div>
+        </div>
+        {liquid && (
+          <div className="field span-2">
+            <label>Liquide à partir de — optionnel</label>
+            <WhenPicker
+              milestones={milestones}
+              allowEmpty
+              emptyLabel="Dès maintenant"
+              value={when}
+              onChange={setWhen}
+            />
+            <span className="help">
+              Pour un placement bloqué (assurance-vie, PEA, épargne verrouillée…) : avant cette date, ce revenu
+              ne compte <b>pas</b> dans l'indépendance financière. Ancre-la sur un <b>jalon</b> si besoin.
+            </span>
+          </div>
+        )}
+      </div>
+      <p className="help" style={{ marginTop: 14 }}>
+        L'<b>indépendance financière</b> est atteinte quand tes revenus passifs <b>liquides</b> couvrent
+        toutes tes dépenses (dépenses, impôts, charges d'actifs, mensualités de prêt).
+      </p>
+      <div className="modal-foot">
+        <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+        <button className="btn btn-brass" onClick={() => { liq.save({ liquid, liquidYear: when.year, liquidRef: when.ref }); onClose(); }}>
+          Enregistrer
+        </button>
+      </div>
+    </Modal>
   );
 }
 

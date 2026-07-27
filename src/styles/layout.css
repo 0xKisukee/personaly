@@ -957,6 +957,48 @@
   background: rgba(203, 169, 107, 0.08);
 }
 
+/* chip de liquidité ÉDITABLE (indépendance financière) — volontairement distinct des
+   badges statiques .liq (encaissé/latent) : bordure, casse normale, icône réglages,
+   affordance de survol pour signaler qu'on peut cliquer. */
+.liq-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--surface-2, rgba(255, 255, 255, 0.02));
+  color: var(--ink-mute);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.liq-edit .liq-edit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint, var(--ink-mute));
+  flex: none;
+}
+.liq-edit[data-liquid="true"] {
+  color: var(--gain);
+  border-color: rgba(147, 195, 156, 0.35);
+}
+.liq-edit[data-liquid="true"] .liq-edit-dot { background: var(--gain); }
+.liq-edit .liq-edit-ic { opacity: 0.55; margin-left: 1px; display: inline-flex; }
+.liq-edit:hover {
+  border-color: var(--line-brass);
+  background: rgba(203, 169, 107, 0.08);
+  color: var(--brass-bright);
+}
+.liq-edit:hover .liq-edit-ic { opacity: 0.95; }
+.liq-edit:focus-visible {
+  outline: 2px solid var(--line-brass);
+  outline-offset: 1px;
+}
+
 /* ------------------ DÉCOMPOSITION (réalisé/latent) ------------- */
 .liq-strip {
   display: flex;

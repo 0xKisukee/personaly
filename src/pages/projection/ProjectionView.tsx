@@ -68,19 +68,21 @@ export default function ProjectionView({
         </div>
       </motion.div>
 
-      {/* --------- indépendance financière (seuil défini par l'utilisateur) --------- */}
-      {fiPoint && p.fiTarget != null && (
+      {/* --------- indépendance financière : revenus passifs LIQUIDES couvrant les dépenses --------- */}
+      {fiPoint && (
         <div className="fi-banner">
           <span className="fi-dot" />
           <b>Indépendance financière</b> atteinte en <b>{fiPoint.year}</b>
-          {fiPoint.age !== null ? ` (${fiPoint.age} ans)` : ""} — ton patrimoine net dépasse alors {money(p.fiTarget)}.
+          {fiPoint.age !== null ? ` (${fiPoint.age} ans)` : ""} — tes revenus passifs liquides
+          ({money(fiPoint.liquidIncome)}/an) couvrent alors tes dépenses ({money(fiPoint.needs)}/an).
         </div>
       )}
-      {!fiPoint && p.fiTarget != null && p.fiTarget > 0 && (
+      {!fiPoint && end.needs > 0 && end.liquidIncome > 0 && (
         <div className="fi-banner warn">
           <span className="fi-dot" />
-          <b>Indépendance financière</b> ({money(p.fiTarget)}) non atteinte sur l'horizon —
-          il manque <b>{money(Math.max(0, p.fiTarget - end.netWorth))}</b> en {end.year}.
+          <b>Indépendance financière</b> non atteinte sur l'horizon — en {end.year} tes revenus passifs
+          liquides couvrent <b>{Math.round((end.liquidIncome / end.needs) * 100)} %</b> de tes dépenses
+          ({money(end.liquidIncome)} / {money(end.needs)} par an).
         </div>
       )}
 

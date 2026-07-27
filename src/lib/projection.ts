@@ -151,6 +151,8 @@ export interface YearPoint {
   eventCash: number; // rentrées/sorties ponctuelles (kind "cash") — compte dans l'enrichissement
   eventFees: number; // frais d'achat/vente — sortie sèche, compte dans l'enrichissement
   eventGain: number; // plus/moins-value réalisée (prix de vente fixé − valeur projetée)
+  liquidIncome: number; // revenus passifs LIQUIDES de l'année — numérateur de l'indépendance financière
+  needs: number; // dépenses à couvrir : dépenses + impôts + charges d'actifs + mensualités de prêt (dénominateur)
   detail: YearDetail;
 }
 
@@ -219,6 +221,14 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   const incomes: FlowLike[] = [...s.incomes, ...flowEvents.filter((e) => e.direction === "in").map(asFlowItem)];
   const expenses: FlowLike[] = [...s.expenses, ...flowEvents.filter((e) => e.direction === "out").map(asFlowItem)];
 
+  // LIQUIDITÉ des revenus manuels (indépendance financière) — aligné sur `incomes`
+  // (les `s.incomes` d'abord, dans l'ordre ; les flux d'événements ne comptent jamais).
+  // Un revenu ne compte dans l'indépendance que s'il est tagué liquide ET débloqué (≥ liquidFrom).
+  const incLiquid = incomes.map((_, k) => k < s.incomes.length && s.incomes[k].liquid === true);
+  const incLiquidFrom = incomes.map((_, k) =>
+    k < s.incomes.length ? (refYear(s.incomes[k].liquidRef, milestones) ?? s.incomes[k].liquidYear ?? startYear) : startYear
+  );
+
   // événements PONCTUELS datés dans l'horizon, groupés par année d'application ;
   // l'année effective résout l'ancrage jalon (l'instantané `year` sert de secours
   // si le jalon a été supprimé — on le signale). Dans une même année, le cash ENTRE
@@ -282,6 +292,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
   const capLeftByAsset = assets.map((A) =>
     A.a.depositCap != null ? Math.max(0, A.a.depositCap - (A.a.depositsMade || 0)) : Infinity
   );
+
+  // année de DÉBLOCAGE de la liquidité par actif (assurance-vie, placement bloqué) : avant
+  // elle, ni le revenu distribué ni la plus-value latente ne comptent dans l'indépendance.
+  const assetLiquidFrom = assets.map((A) => refYear(A.a.liquidRef, milestones) ?? A.a.liquidYear ?? startYear);
 
   // affectation du surplus : flows ordonnés, résolus vers l'index d'actif cible
   // (existants, éligibles, sans doublon). Chaque flow garde son mode/cible.
@@ -590,6 +604,25 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       yI += mI; yP += mP; yIns += mIns; yG += g; yY += yieldThisMonth; yDep += depTotal;
     }
 
+    // ---- INDÉPENDANCE FINANCIÈRE : les dépenses (dépenses + impôts + charges d'actifs +
+    // mensualités de prêt, capital compris) sont-elles couvertes par les revenus passifs
+    // LIQUIDES de l'année ? Numérateur = revenus distribués liquides + plus-values latentes
+    // taguées liquides (positives) + revenus manuels tagués liquides, chacun débloqué (≥ date).
+    let yLiq = 0;
+    for (let k = 0; k < assets.length; k++) {
+      if (year < assetLiquidFrom[k]) continue;
+      if (assets[k].a.incomeLiquid !== false) yLiq += aInc[k];
+      if (assets[k].a.growthLiquid === true && aGro[k] > 0) yLiq += aGro[k];
+    }
+    for (let k = 0; k < incomes.length; k++) {
+      if (incLiquid[k] && year >= incLiquidFrom[k]) yLiq += incMonthly[k] * months;
+    }
+    const needs = yExp + yChg + yI + yP + yIns;
+    if (fiYearIndex === null && needs > EPS && yLiq >= needs - EPS) {
+      fiYearIndex = i;
+      events.push({ yearIndex: i, year, label: "Indépendance financière", kind: "fi" });
+    }
+
     const detail: YearDetail = opts.light ? EMPTY_DETAIL : {
       // inclus si présent AU DÉBUT de l'année (colonne patrimoine : value = valeur de
       // début, 0 pour un actif acheté dans l'année) OU s'il a eu une activité dans
@@ -613,6 +646,7 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       grossAssets: startGross, debt: startDebt, savings: startSavings, netWorth: startGross - startDebt + startSavings,
       distributed: yD, extra: yEx, expenses: yExp, charges: yChg, interest: yI, principal: yP, insurance: yIns, growth: yG, savingsYield: yY, deposited: yDep, withdrawn: yWdr,
       eventCash: evCash, eventFees: evFees, eventGain: evGain,
+      liquidIncome: yLiq, needs,
       detail,
     });
 
@@ -626,22 +660,12 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
       p.distributed = scale(p.distributed); p.extra = scale(p.extra); p.expenses = scale(p.expenses); p.charges = scale(p.charges);
       p.interest = scale(p.interest); p.principal = scale(p.principal); p.insurance = scale(p.insurance); p.growth = scale(p.growth); p.savingsYield = scale(p.savingsYield); p.deposited = scale(p.deposited); p.withdrawn = scale(p.withdrawn);
       p.eventCash = scale(p.eventCash); p.eventFees = scale(p.eventFees); p.eventGain = scale(p.eventGain);
+      p.liquidIncome = scale(p.liquidIncome); p.needs = scale(p.needs);
       p.detail.assets.forEach((a) => { a.value = scale(a.value); a.growth = scale(a.growth); a.income = scale(a.income); a.charges = scale(a.charges); a.deposit = scale(a.deposit); a.withdrawal = scale(a.withdrawal); });
       p.detail.loans.forEach((l) => { l.balance = scale(l.balance); l.interest = scale(l.interest); l.principal = scale(l.principal); l.insurance = scale(l.insurance); });
       p.detail.incomes.forEach((f) => (f.amount = scale(f.amount)));
       p.detail.expenses.forEach((f) => (f.amount = scale(f.amount)));
       p.detail.events.forEach((e) => { e.cash = scale(e.cash); e.fees = scale(e.fees); e.gain = scale(e.gain); });
-    }
-  }
-
-  // Indépendance financière : seuil de patrimoine net FIXÉ PAR L'UTILISATEUR (fiTarget),
-  // pas déduit par le moteur. Évaluée APRÈS le passage en euros constants pour coller
-  // aux montants affichés (en réel, le seuil s'entend en pouvoir d'achat d'aujourd'hui).
-  if (params.fiTarget != null && params.fiTarget > 0) {
-    const idx = points.findIndex((pt) => pt.netWorth >= params.fiTarget!);
-    if (idx >= 0) {
-      fiYearIndex = idx;
-      events.push({ yearIndex: idx, year: points[idx].year, label: "Indépendance financière", kind: "fi" });
     }
   }
 

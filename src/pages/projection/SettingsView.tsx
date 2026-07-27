@@ -4,8 +4,8 @@ import CascadeEditor from "./CascadeEditor";
 import SurplusFlowEditor from "./SurplusFlowEditor";
 
 /**
- * Vue Réglages : toutes les HYPOTHÈSES du plan (rendement, inflation, indépendance,
- * indexation) et les RÈGLES d'affectation de trésorerie (flows du surplus, retraits
+ * Vue Réglages : toutes les HYPOTHÈSES du plan (rendement, inflation, indexation)
+ * et les RÈGLES d'affectation de trésorerie (flows du surplus, retraits
  * en déficit). Isolée de la Projection pour la garder épurée — les nouveaux
  * utilisateurs voient d'abord la courbe, et viennent ici pour affiner.
  */
@@ -35,14 +35,6 @@ export default function SettingsView({ p, setP, eligibleAssets }: {
           <input className="input mono" type="number" step="0.1" value={p.inflation || ""} placeholder="0"
             onChange={(e) => setP({ inflation: Number(e.target.value) })} />
           <span className="assum-unit">%/an</span>
-        </div>
-      </div>
-      <div className="field assum-num">
-        <label>Patrimoine d'indépendance</label>
-        <div className="assum-input">
-          <input className="input mono" type="number" placeholder="montant" style={{ width: 130 }}
-            value={p.fiTarget ?? ""} onChange={(e) => setP({ fiTarget: e.target.value ? Number(e.target.value) : undefined })} />
-          <span className="assum-unit">€</span>
         </div>
       </div>
       <div className="assum-toggles" title="Réglages communs à tous les plans">

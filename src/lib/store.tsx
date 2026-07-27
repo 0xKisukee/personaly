@@ -31,8 +31,9 @@ function loadProjection(raw: object | undefined): ProjectionParams {
       .filter((t): t is SurplusFlow => !!t && typeof (t as SurplusFlow).assetId === "string") as SurplusFlow[];
   }
   delete (projection as Record<string, unknown>).scenario; // héritée des scénarios (supprimés)
-  delete (projection as Record<string, unknown>).goalAmount; // ancêtres de fiTarget
+  delete (projection as Record<string, unknown>).goalAmount; // ancêtres de l'ancien seuil de patrimoine
   delete (projection as Record<string, unknown>).goalYear;
+  delete (projection as Record<string, unknown>).fiTarget; // ancien seuil de patrimoine → remplacé par l'indépendance calculée (couverture des dépenses)
   return projection;
 }
 

@@ -99,7 +99,7 @@ describe("loadState", () => {
     expect(s.activePlanId).toBe("p1"); // retombe sur le 1er plan
   });
 
-  it("purge les clés héritées : valuationRate (actifs), goalAmount/goalYear (projection)", () => {
+  it("purge les clés héritées : valuationRate (actifs), goalAmount/goalYear/fiTarget (projection)", () => {
     write({
       assets: [{ id: "a", label: "A5", category: "vehicule", value: 18500, growthRate: -3, valuationRate: -3, incomeMode: "none" }],
       plans: [{ id: "p1", name: "Un", projection: { horizon: 40, goalAmount: 1_200_000, goalYear: 2060, fiTarget: 1_100_000 } }],
@@ -110,7 +110,7 @@ describe("loadState", () => {
     expect(s.assets[0].growthRate).toBe(-3);
     expect("goalAmount" in s.plans[0].projection).toBe(false);
     expect("goalYear" in s.plans[0].projection).toBe(false);
-    expect(s.plans[0].projection.fiTarget).toBe(1_100_000);
+    expect("fiTarget" in s.plans[0].projection).toBe(false);
   });
 
   it("liste de plans vide : recrée le plan par défaut", () => {
