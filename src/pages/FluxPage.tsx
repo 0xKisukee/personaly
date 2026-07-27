@@ -315,17 +315,14 @@ export default function FluxPage() {
           </span>
         </div>
 
-        {/* revenus du patrimoine (auto, liquide) */}
+        {/* revenus du patrimoine (auto, liquide) — masqué si aucun actif ne distribue */}
+        {patrimoineIncomes.length > 0 && (
+        <>
         <div className="flux-sub">
           <span className="flux-sub-label">Revenus du patrimoine</span>
           <Liq kind="encaisse" />
           <span className="flux-sub-total mono">{money(disp(patrimoineIncomeYearly(state)))} {per}</span>
         </div>
-        {patrimoineIncomes.length === 0 ? (
-          <p className="help" style={{ marginBottom: 16 }}>
-            Aucun actif ne distribue de revenu. Ajoute un loyer ou un dividende dans <b>Patrimoine</b>.
-          </p>
-        ) : (
           <div className="rows" style={{ marginBottom: 18 }}>
             {patrimoineIncomes.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
@@ -344,6 +341,7 @@ export default function FluxPage() {
               </div>
             ))}
           </div>
+        </>
         )}
 
         {/* revenus complémentaires (manuels, liquide) */}
@@ -381,17 +379,14 @@ export default function FluxPage() {
           </div>
         )}
 
-        {/* plus-value latente (auto, appréciations) */}
+        {/* plus-value latente (auto, appréciations) — masqué si aucun actif ne s'apprécie */}
+        {appreciationRows.length > 0 && (
+        <>
         <div className="flux-sub">
           <span className="flux-sub-label">Plus-value latente</span>
           <Liq kind="latent" />
           <span className="flux-sub-total mono">{signedMoney(disp(latentGainYearly(state)))} {per}</span>
         </div>
-        {appreciationRows.length === 0 ? (
-          <p className="help">
-            Aucun actif ne s'apprécie. Définis un taux d'évolution positif (PEA, immo…) dans <b>Patrimoine</b>.
-          </p>
-        ) : (
           <div className="rows">
             {appreciationRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
@@ -410,6 +405,7 @@ export default function FluxPage() {
               </div>
             ))}
           </div>
+        </>
         )}
       </section>
       )}
@@ -459,15 +455,14 @@ export default function FluxPage() {
           </div>
         )}
 
-        {/* charges d'actifs (auto, liquide) */}
+        {/* charges d'actifs (auto, liquide) — masqué si aucun actif ne porte de charges */}
+        {chargeRows.length > 0 && (
+        <>
         <div className="flux-sub" style={{ marginTop: 18 }}>
           <span className="flux-sub-label">Charges d'actifs</span>
           <Liq kind="encaisse" />
           <span className="flux-sub-total mono">−{money(disp(assetChargesYearly(state)))} {per}</span>
         </div>
-        {chargeRows.length === 0 ? (
-          <p className="help" style={{ marginBottom: 18 }}>Taxe foncière, charges de copropriété… Renseigne-les sur un actif dans <b>Patrimoine</b>.</p>
-        ) : (
           <div className="rows" style={{ marginBottom: 18 }}>
             {chargeRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
@@ -481,18 +476,17 @@ export default function FluxPage() {
               </div>
             ))}
           </div>
+        </>
         )}
 
-        {/* intérêts & assurance d'emprunt (auto, liquide ; capital = neutre) */}
-        <div className="flux-sub">
-          <span className="flux-sub-label">Intérêts & assurance d'emprunt</span>
-          <Liq kind="encaisse" />
-          <span className="flux-sub-total mono">−{money(disp(loanInterestYearly(state) + loanInsuranceYearly(state)))} {per}</span>
-        </div>
-        {loanRows.length === 0 ? (
-          <p className="help">Aucun emprunt. Les intérêts des prêts saisis dans <b>Patrimoine</b> apparaîtront ici.</p>
-        ) : (
+        {/* intérêts & assurance d'emprunt (auto, liquide ; capital = neutre) — masqué sans emprunt */}
+        {loanRows.length > 0 && (
           <>
+            <div className="flux-sub">
+              <span className="flux-sub-label">Intérêts & assurance d'emprunt</span>
+              <Liq kind="encaisse" />
+              <span className="flux-sub-total mono">−{money(disp(loanInterestYearly(state) + loanInsuranceYearly(state)))} {per}</span>
+            </div>
             <div className="rows">
               {loanRows.map(({ l, split }) => {
                 const insY = (l.insurance || 0) * 12;
@@ -521,15 +515,14 @@ export default function FluxPage() {
           </>
         )}
 
-        {/* moins-value latente (auto, dépréciations) */}
+        {/* moins-value latente (auto, dépréciations) — masqué si aucun actif ne se déprécie */}
+        {depreciationRows.length > 0 && (
+        <>
         <div className="flux-sub" style={{ marginTop: 18 }}>
           <span className="flux-sub-label">Moins-value latente</span>
           <Liq kind="latent" />
           <span className="flux-sub-total mono">{money(disp(latentLossYearly(state)))} {per}</span>
         </div>
-        {depreciationRows.length === 0 ? (
-          <p className="help">Aucun actif ne se déprécie. Un taux d'évolution négatif (véhicule…) apparaîtrait ici comme une perte de valeur.</p>
-        ) : (
           <div className="rows">
             {depreciationRows.map(({ asset, yearly }) => (
               <div className="row" key={asset.id}>
@@ -546,6 +539,7 @@ export default function FluxPage() {
               </div>
             ))}
           </div>
+        </>
         )}
       </section>
       )}
