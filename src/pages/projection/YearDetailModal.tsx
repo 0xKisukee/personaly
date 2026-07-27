@@ -9,12 +9,17 @@ import { IconChevron } from "../../components/icons";
  * agrégat dépliable en sous-lignes. Vérifie l'identité « début + enrichissement =
  * début suivant » (affichée en euros courants).
  */
-export default function YearDetailModal({ point, real, onClose }: { point: YearPoint; real: boolean; onClose: () => void }) {
+export default function YearDetailModal({ point, next, real, onClose }: { point: YearPoint; next: YearPoint | null; real: boolean; onClose: () => void }) {
   const d: YearDetail = point.detail;
   const suffix = real ? " · € constants" : "";
   const enrichment = point.distributed + point.extra + point.savingsYield + point.growth
     + point.eventCash + point.eventGain
     - point.expenses - point.charges - point.interest - point.insurance - point.eventFees;
+  // En euros constants, le stock entier perd 1 an de pouvoir d'achat en passant à l'année
+  // suivante (déflateur (1+infl)^i → (1+infl)^(i+1)). Cette érosion n'est portée par aucun
+  // flux : c'est le terme qui réconcilie « début + enrichissement = début suivant » en réel.
+  // (nul en euros courants — la déflation n'y est pas appliquée.)
+  const erosion = real && next ? next.netWorth - point.netWorth - enrichment : 0;
   return (
     <Modal open title={`Composition ${point.year}`} subtitle={`Patrimoine net ${money(point.netWorth)}${point.age !== null ? ` · ${point.age} ans` : ""}${suffix}`} onClose={onClose}>
       <div className="yd-grid">
@@ -99,12 +104,17 @@ export default function YearDetailModal({ point, real, onClose }: { point: YearP
             <span>Enrichissement</span>
             <span className="mono" style={{ color: "var(--brass-bright)" }}>{signedMoney(enrichment)}</span>
           </div>
-          {/* pont entre les deux colonnes : début d'année + enrichissement = début d'année suivante
-              (masqué en euros constants : le déflateur diffère d'une année à l'autre) */}
-          {!real && (
+          {/* érosion monétaire : en euros constants, le patrimoine perd 1 an de pouvoir d'achat
+              d'une année sur l'autre. Terme qui réconcilie le pont ci-dessous (voir plus haut). */}
+          {real && next && Math.abs(erosion) > 0.005 && (
+            <YdFlow label="Érosion monétaire (inflation)" v={erosion} />
+          )}
+          {/* pont entre les deux colonnes : début d'année + enrichissement (+ érosion en réel)
+              = début d'année suivante. */}
+          {next && (
             <div className="yd-row" style={{ opacity: 0.8 }}>
               <span className="yd-label">→ Patrimoine net début {point.year + 1}</span>
-              <span className="mono" style={{ color: "var(--ink-soft)" }}>{money(point.netWorth + enrichment)}</span>
+              <span className="mono" style={{ color: "var(--ink-soft)" }}>{money(point.netWorth + enrichment + erosion)}</span>
             </div>
           )}
         </div>

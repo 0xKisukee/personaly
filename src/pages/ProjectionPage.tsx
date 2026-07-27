@@ -147,7 +147,9 @@ export default function ProjectionPage() {
   };
 
   const eligibleAssets = state.assets.filter(canTransfer);
-  const selPoint = selYear !== null ? points.find((pt) => pt.year === selYear) ?? null : null;
+  const selIdx = selYear !== null ? points.findIndex((pt) => pt.year === selYear) : -1;
+  const selPoint = selIdx >= 0 ? points[selIdx] : null;
+  const nextPoint = selIdx >= 0 ? points[selIdx + 1] ?? null : null;
 
   return (
     <>
@@ -257,7 +259,7 @@ export default function ProjectionPage() {
       )}
 
       {selPoint && (
-        <YearDetailModal point={selPoint} real={p.realTerms} onClose={() => setSelYear(null)} />
+        <YearDetailModal point={selPoint} next={nextPoint} real={p.realTerms} onClose={() => setSelYear(null)} />
       )}
       {evDraft && (
         <EventModal draft={evDraft} s={like} onChange={setEvDraft} onSave={saveEvent} onClose={() => setEvDraft(null)} />
