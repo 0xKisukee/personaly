@@ -207,6 +207,15 @@ export interface Liability {
 /* ------------------------------- FLUX ----------------------------- */
 
 export type IncomeCategory = "salaire" | "rente" | "aide" | "autre";
+
+/**
+ * NATURE d'un revenu manuel : revenu du TRAVAIL (« actif ») ou revenu PASSIF.
+ * L'indépendance financière ne compte QUE le passif — un salaire, même encaissé
+ * en cash tous les mois, ne rend indépendant de rien : il s'arrête si on arrête.
+ * Défaut dérivé de la catégorie (`salaire` = actif, le reste = passif), surchargeable
+ * par flux (ex. une mission freelance rangée en « autre » reste du travail).
+ */
+export type IncomeNature = "actif" | "passif";
 export type ExpenseCategory = "vie_courante" | "logement" | "impot" | "loisir" | "autre";
 
 /**
@@ -234,13 +243,24 @@ export interface IncomeItem {
   startRef?: MilestoneRef;
   endRef?: MilestoneRef;
   growth?: number; // revalorisation %/an propre au flux (sinon suit l'inflation globale)
-  // LIQUIDITÉ pour l'indépendance financière : ce revenu compte-t-il comme revenu passif
-  // liquide (couvrant réellement les dépenses) ? Défaut false : l'utilisateur tague ce qui
-  // compte (un salaire tagué liquide compte s'il le décide ; une rente/pension typiquement).
+  // NATURE du revenu — cf. IncomeNature. Absente = défaut de la catégorie.
+  // Un revenu ACTIF ne compte JAMAIS dans l'indépendance financière, quoi que dise `liquid`.
+  nature?: IncomeNature;
+  // LIQUIDITÉ pour l'indépendance financière : ce revenu PASSIF est-il réellement encaissable
+  // (couvrant les dépenses) ? Défaut false : l'utilisateur tague ce qui compte (une rente ou
+  // pension, typiquement). Sans effet sur un revenu actif.
   liquid?: boolean;
   liquidYear?: number; // année de déblocage — avant elle, ne compte pas même si liquid=true
   liquidRef?: MilestoneRef; // déblocage ancré sur un jalon (PRIME sur liquidYear)
 }
+
+/** Nature effective d'un revenu manuel : override explicite, sinon défaut de la catégorie. */
+export const incomeNature = (it: Pick<IncomeItem, "category" | "nature">): IncomeNature =>
+  it.nature ?? (it.category === "salaire" ? "actif" : "passif");
+
+/** Ce revenu peut-il compter dans l'indépendance financière ? (nature seule — hors liquidité/déblocage) */
+export const isPassiveIncome = (it: Pick<IncomeItem, "category" | "nature">): boolean =>
+  incomeNature(it) === "passif";
 
 export interface ExpenseItem {
   id: string;

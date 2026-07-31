@@ -1020,6 +1020,28 @@ describe("indépendance financière (revenus passifs liquides couvrant les dépe
     expect(project(state(liq), params()).fiYearIndex).toBe(0);
   });
 
+  it("un salaire tagué liquide ne compte JAMAIS (revenu du travail)", () => {
+    const s = state({
+      incomes: [{ id: "i", label: "Salaire", category: "salaire" as const, amount: 3_000, period: "monthly" as const, liquid: true }],
+      expenses: [{ id: "e", label: "V", category: "vie_courante" as const, amount: 1_800, period: "monthly" as const }],
+    });
+    expect(project(s, params()).fiYearIndex).toBeNull();
+    // ... sauf si l'utilisateur le requalifie explicitement en revenu passif
+    const passif = state({
+      incomes: [{ id: "i", label: "Salaire", category: "salaire" as const, amount: 3_000, period: "monthly" as const, liquid: true, nature: "passif" as const }],
+      expenses: [{ id: "e", label: "V", category: "vie_courante" as const, amount: 1_800, period: "monthly" as const }],
+    });
+    expect(project(passif, params()).fiYearIndex).toBe(0);
+  });
+
+  it("nature=actif exclut un revenu hors catégorie salaire (freelance rangé en « autre »)", () => {
+    const s = state({
+      incomes: [{ id: "i", label: "Mission", category: "autre" as const, amount: 3_000, period: "monthly" as const, liquid: true, nature: "actif" as const }],
+      expenses: [{ id: "e", label: "V", category: "vie_courante" as const, amount: 1_800, period: "monthly" as const }],
+    });
+    expect(project(s, params()).fiYearIndex).toBeNull();
+  });
+
   it("les mensualités de prêt entrent dans les dépenses à couvrir", () => {
     const s = state({
       assets: [asset({ id: "immo", category: "immobilier", value: 400_000, incomeMode: "amount", income: { amount: 2_000, period: "monthly" } })],

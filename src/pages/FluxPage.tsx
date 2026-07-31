@@ -7,11 +7,12 @@ import type {
   ExpenseItem,
   IncomeCategory,
   IncomeItem,
+  IncomeNature,
   Milestone,
   MilestoneRef,
   Period,
 } from "../lib/types";
-import { flowBounds } from "../lib/types";
+import { flowBounds, incomeNature } from "../lib/types";
 import {
   assetChargesYearly,
   assetYearlyGrowth,
@@ -93,7 +94,9 @@ const Liq = ({ kind }: { kind: "encaisse" | "latent" }) => (
 );
 
 /** État édité par la modale de liquidité (indépendance financière). `save` mappe le flag
- *  vers le bon champ (incomeLiquid / growthLiquid / liquid) selon la source du revenu. */
+ *  vers le bon champ (incomeLiquid / growthLiquid / liquid) selon la source du revenu.
+ *  `nature` n'est présent que pour un revenu MANUEL : lui seul peut être du revenu du
+ *  travail, et la modale propose alors le choix actif / passif. */
 interface LiqState {
   title: string;
   subtitle: string;
@@ -101,18 +104,23 @@ interface LiqState {
   liquid: boolean;
   liquidYear?: number;
   liquidRef?: MilestoneRef;
-  save: (v: { liquid: boolean; liquidYear?: number; liquidRef?: MilestoneRef }) => void;
+  nature?: IncomeNature;
+  save: (v: { liquid: boolean; liquidYear?: number; liquidRef?: MilestoneRef; nature?: IncomeNature }) => void;
 }
 
-/** Pill cliquable indiquant si un revenu compte comme revenu passif liquide (et sa date de déblocage). */
-function LiqPill({ liquid, year, refv, milestones, onClick }: {
-  liquid: boolean; year?: number; refv?: MilestoneRef; milestones: Milestone[]; onClick: () => void;
+/** Pill cliquable indiquant si un revenu compte comme revenu passif liquide (et sa date de
+ *  déblocage). Un revenu ACTIF (travail) est hors indépendance quoi qu'il arrive. */
+function LiqPill({ liquid, year, refv, milestones, nature, onClick }: {
+  liquid: boolean; year?: number; refv?: MilestoneRef; milestones: Milestone[];
+  nature?: IncomeNature; onClick: () => void;
 }) {
-  const w = liquid ? whenLabel(year, refv, milestones) : null;
-  const label = !liquid ? "Illiquide" : w ? `Liquide dès ${w}` : "Liquide";
+  const actif = nature === "actif";
+  const on = liquid && !actif;
+  const w = on ? whenLabel(year, refv, milestones) : null;
+  const label = actif ? "Revenu du travail" : !liquid ? "Illiquide" : w ? `Liquide dès ${w}` : "Liquide";
   return (
-    <button type="button" className="liq-edit" data-liquid={liquid}
-      onClick={onClick} title="Liquidité pour l'indépendance financière — cliquer pour modifier">
+    <button type="button" className="liq-edit" data-liquid={on}
+      onClick={onClick} title="Indépendance financière — cliquer pour modifier">
       <span className="liq-edit-dot" />
       {label}
       <span className="liq-edit-ic"><IconSettings size={11} /></span>
@@ -210,11 +218,12 @@ export default function FluxPage() {
     save: (v) => saveAsset(a.id, { growthLiquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
   });
   const openIncomeLiq = (it: IncomeItem) => setLiq({
-    title: `Liquidité — ${it.label || "Revenu"}`,
-    subtitle: "Ce revenu compte-t-il comme revenu passif liquide pour l'indépendance financière ? (un salaire, non ; une rente ou pension, oui).",
-    toggleLabel: "Compte comme revenu passif liquide",
+    title: `Indépendance — ${it.label || "Revenu"}`,
+    subtitle: "Revenu du TRAVAIL (salaire, freelance) ou revenu PASSIF (rente, pension, loyer) ? Seul le passif compte dans l'indépendance financière.",
+    toggleLabel: "Ce revenu passif est-il encaissable ?",
     liquid: it.liquid === true, liquidYear: it.liquidYear, liquidRef: it.liquidRef,
-    save: (v) => saveIncome({ ...it, liquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
+    nature: incomeNature(it),
+    save: (v) => saveIncome({ ...it, nature: v.nature, liquid: v.liquid, liquidYear: v.liquidYear, liquidRef: v.liquidRef }),
   });
 
   return (
@@ -366,7 +375,7 @@ export default function FluxPage() {
                   <div className="row-ic txt-gain"><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
-                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /><LiqPill liquid={it.liquid === true} year={it.liquidYear} refv={it.liquidRef} milestones={state.milestones} onClick={() => openIncomeLiq(it)} /></div>
+                    <div className="row-meta"><span>{Meta.label}</span>· <span>{money(it.amount)} {it.period === "monthly" ? "/ mois" : "/ an"}</span><Bounds item={it} milestones={state.milestones} /><LiqPill liquid={it.liquid === true} year={it.liquidYear} refv={it.liquidRef} nature={incomeNature(it)} milestones={state.milestones} onClick={() => openIncomeLiq(it)} /></div>
                   </div>
                   <div className="row-val txt-gain">{signedMoney(disp(toYearly(it)))}<div className="flux zero">{per}</div></div>
                   <div className="row-actions">
@@ -581,11 +590,29 @@ function LiquidityModal({ liq, milestones, onClose }: {
   onClose: () => void;
 }) {
   const [liquid, setLiquid] = useState(liq.liquid);
+  const [nature, setNature] = useState<IncomeNature | undefined>(liq.nature);
   const [when, setWhen] = useState<{ year?: number; ref?: MilestoneRef }>({ year: liq.liquidYear, ref: liq.liquidRef });
+  // un revenu du TRAVAIL est hors indépendance par nature : le réglage de liquidité n'a pas de sens
+  const actif = nature === "actif";
 
   return (
     <Modal open title={liq.title} subtitle={liq.subtitle} onClose={onClose}>
       <div className="form-grid">
+        {nature && (
+          <div className="field span-2">
+            <label>Nature du revenu</label>
+            <div className="segment">
+              <button data-on={nature === "actif"} onClick={() => setNature("actif")}>Travail (salaire)</button>
+              <button data-on={nature === "passif"} onClick={() => setNature("passif")}>Revenu passif</button>
+            </div>
+            <span className="help">
+              Un <b>revenu du travail</b> s'arrête quand tu t'arrêtes : il ne compte jamais dans l'indépendance
+              financière, même encaissé en cash. Un <b>revenu passif</b> (rente, pension, loyer, dividende) compte,
+              s'il est encaissable.
+            </span>
+          </div>
+        )}
+        {!actif && (
         <div className="field span-2">
           <label>{liq.toggleLabel}</label>
           <div className="segment">
@@ -593,7 +620,8 @@ function LiquidityModal({ liq, milestones, onClose }: {
             <button data-on={!liquid} onClick={() => setLiquid(false)}>Illiquide</button>
           </div>
         </div>
-        {liquid && (
+        )}
+        {liquid && !actif && (
           <div className="field span-2">
             <label>Liquide à partir de — optionnel</label>
             <WhenPicker
@@ -616,7 +644,7 @@ function LiquidityModal({ liq, milestones, onClose }: {
       </p>
       <div className="modal-foot">
         <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
-        <button className="btn btn-brass" onClick={() => { liq.save({ liquid, liquidYear: when.year, liquidRef: when.ref }); onClose(); }}>
+        <button className="btn btn-brass" onClick={() => { liq.save({ liquid, liquidYear: when.year, liquidRef: when.ref, nature }); onClose(); }}>
           Enregistrer
         </button>
       </div>
@@ -636,6 +664,7 @@ interface FlowDraft {
   startRef?: MilestoneRef;
   endRef?: MilestoneRef;
   growth?: number;
+  nature?: IncomeNature; // revenus uniquement
 }
 
 function FlowModal({
@@ -657,6 +686,11 @@ function FlowModal({
 }) {
   const set = (patch: Partial<FlowDraft>) => onChange({ ...draft, ...patch });
   const isIncome = kind === "income";
+  // nature effective du revenu : override explicite, sinon défaut de la catégorie. On ne
+  // STOCKE l'override que s'il diffère du défaut — sinon le flux suit sa catégorie.
+  const cat = draft.category as IncomeCategory;
+  const nature = incomeNature({ category: cat, nature: draft.nature });
+  const setNature = (n: IncomeNature) => set({ nature: n === incomeNature({ category: cat }) ? undefined : n });
 
   return (
     <Modal
@@ -701,6 +735,23 @@ function FlowModal({
             onChange={(e) => set({ amount: Number(e.target.value) })}
           />
         </div>
+        {isIncome && (
+          <div className="field span-2">
+            <label>Nature</label>
+            <Segment
+              value={nature}
+              onChange={setNature}
+              options={[
+                { value: "actif" as IncomeNature, label: "Travail (salaire)" },
+                { value: "passif" as IncomeNature, label: "Revenu passif" },
+              ]}
+            />
+            <span className="help">
+              Seul un <b>revenu passif</b> (rente, pension, loyer…) compte dans l'indépendance financière —
+              un revenu du travail s'arrête quand tu t'arrêtes.
+            </span>
+          </div>
+        )}
         <div className="field span-2">
           <label>Périodicité</label>
           <Segment

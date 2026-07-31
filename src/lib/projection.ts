@@ -18,7 +18,7 @@
    =========================================================================== */
 
 import type { Asset, FlowEvent, Milestone, MilestoneRef, Period, PlannedEvent, ProjectionParams, SimState, SurplusFlow } from "./types";
-import { canTransfer, EPARGNE_ID, eventYear, flowBounds, refYear } from "./types";
+import { canTransfer, EPARGNE_ID, eventYear, flowBounds, isPassiveIncome, refYear } from "./types";
 import { toMonthly, isActiveYear } from "./format";
 import { monthlyPayment } from "./finance";
 
@@ -223,8 +223,10 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
 
   // LIQUIDITÉ des revenus manuels (indépendance financière) — aligné sur `incomes`
   // (les `s.incomes` d'abord, dans l'ordre ; les flux d'événements ne comptent jamais).
-  // Un revenu ne compte dans l'indépendance que s'il est tagué liquide ET débloqué (≥ liquidFrom).
-  const incLiquid = incomes.map((_, k) => k < s.incomes.length && s.incomes[k].liquid === true);
+  // Un revenu ne compte dans l'indépendance que s'il est PASSIF (un salaire ne rend indépendant
+  // de rien : il s'arrête si on arrête) ET tagué liquide ET débloqué (≥ liquidFrom).
+  const incLiquid = incomes.map((_, k) =>
+    k < s.incomes.length && isPassiveIncome(s.incomes[k]) && s.incomes[k].liquid === true);
   const incLiquidFrom = incomes.map((_, k) =>
     k < s.incomes.length ? (refYear(s.incomes[k].liquidRef, milestones) ?? s.incomes[k].liquidYear ?? startYear) : startYear
   );
@@ -607,7 +609,8 @@ export function project(s: SimState, params: ProjectionParams, opts: ProjectOpti
     // ---- INDÉPENDANCE FINANCIÈRE : les dépenses (dépenses + impôts + charges d'actifs +
     // mensualités de prêt, capital compris) sont-elles couvertes par les revenus passifs
     // LIQUIDES de l'année ? Numérateur = revenus distribués liquides + plus-values latentes
-    // taguées liquides (positives) + revenus manuels tagués liquides, chacun débloqué (≥ date).
+    // taguées liquides (positives) + revenus manuels PASSIFS tagués liquides (un salaire est
+    // exclu par nature), chacun débloqué (≥ date).
     let yLiq = 0;
     for (let k = 0; k < assets.length; k++) {
       if (year < assetLiquidFrom[k]) continue;
