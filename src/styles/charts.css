@@ -26,139 +26,234 @@
   font-size: 12px;
   color: var(--ink-mute);
 }
-/* cascade d'affectation du surplus : rangée pleine largeur en bas du panneau */
-.assum-surplus {
-  flex-basis: 100%;
-}
-.assum-cascade {
+/* --- RÈGLES DE TRÉSORERIE (Réglages) : surplus & retraits --------------
+   Les deux éditeurs partagent une seule grammaire : un rail d'étapes
+   NUMÉROTÉES qui se termine toujours par l'Épargne, plus une phrase en
+   clair par étape — les modes (« tout le reste », « % du reste ») et le
+   solde cible ne se devinent pas depuis les contrôles seuls. */
+.settings-page {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
 }
-/* réserve la place des hints plafond (positionnés en absolu sous les selects) */
-.assum-cascade:has(.help) {
-  padding-bottom: 20px;
+.rules-eyebrow {
+  margin-bottom: 12px;
+  opacity: 0.75;
 }
-.assum-cascade .select {
-  width: auto;
-  min-width: 150px;
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 18px;
+  align-items: start;
 }
-/* la croix est SOUDÉE au select (capsule unique) : pas d'ambiguïté sur
-   l'actif qu'elle retire — elle appartient au select qu'elle prolonge */
-.cascade-item {
-  position: relative;
+.rule-block {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(10, 13, 11, 0.35);
 }
-.cascade-item .select {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: 0;
+.rule-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.cascade-item .icon-btn {
-  width: 30px;
-  height: auto;
-  align-self: stretch;
-  border: 1px solid var(--line-strong);
-  border-left: 1px solid var(--line);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  background: rgba(10, 13, 11, 0.6);
+.rule-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
-.cascade-item .icon-btn:hover {
-  color: var(--drain);
-  background: rgba(213, 152, 115, 0.08);
-}
-/* le hint plafond est sorti du flux : il pend sous le select sans pousser la rangée */
-.cascade-item .help {
-  position: absolute;
-  top: 100%;
-  left: 2px;
-  margin-top: 4px;
-  width: max-content;
-  white-space: nowrap;
-}
-.cascade-add {
+.rule-lede {
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--ink-mute);
+  max-width: 52ch;
+}
+.rule-lede b {
+  color: var(--ink-soft);
+  font-weight: 500;
 }
 
-/* --- éditeur des flows d'affectation du surplus (cash flow priorities) --- */
-.flow-list {
+/* rail d'étapes : le trait vertical relie les numéros, y compris le terminal */
+.rule-steps {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.flow-row {
+.rule-steps::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 11px;
+  border-left: 1px dashed var(--line-strong);
+}
+.rule-step,
+.rule-term,
+.rule-empty {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.step-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-mute);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg, rgba(10, 13, 11, 0.95));
+}
+.rule-step .step-n {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+.step-body {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  background: rgba(10, 13, 11, 0.4);
+  background: rgba(10, 13, 11, 0.5);
 }
-.flow-head {
+.rule-step.is-compact .step-body {
+  gap: 0;
+}
+.step-top {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.flow-rank {
+.step-asset {
+  width: auto;
+  min-width: 150px;
+  flex: 1;
+}
+.step-modes {
   font-size: 12px;
+  white-space: nowrap;
+}
+.step-hint {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   color: var(--ink-mute);
-  min-width: 14px;
 }
-.flow-head .select {
-  min-width: 140px;
-}
-.flow-modes {
-  font-size: 12px;
-}
-.flow-move {
+.step-move {
   display: flex;
   gap: 4px;
   margin-left: auto;
 }
-.flow-move .icon-btn {
+.step-move .icon-btn {
   width: 28px;
   height: 28px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: rgba(10, 13, 11, 0.6);
 }
-.flow-move .icon-btn:disabled {
-  opacity: 0.35;
+.step-move .icon-btn:disabled {
+  opacity: 0.3;
   cursor: default;
 }
-.flow-move .icon-btn:not(:disabled):hover {
+.step-move .icon-btn:not(:disabled):hover {
   color: var(--brass-bright);
 }
-.flow-cfg {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding-left: 22px;
+.step-move .icon-btn.danger:not(:disabled):hover {
+  color: var(--drain);
 }
-.flow-input {
+
+/* config : chaque contrôle porte son propre libellé (le « solde cible » nu
+   était illisible — on ne devinait ni ce qu'il plafonnait ni qu'il était optionnel) */
+.step-cfg {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cfg-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.cfg-input {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.flow-input .input {
+.cfg-input .input {
   width: 96px;
 }
-.flow-nominal,
-.flow-modes {
-  white-space: nowrap;
+.cfg-input .input.cfg-wide {
+  width: 124px;
 }
-.flow-add {
-  max-width: 320px;
+
+/* la phrase en clair : ce que l'étape FAIT, reformulé depuis les contrôles */
+.step-say {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
 }
-.flow-rest {
+.step-say b {
+  color: var(--brass-bright);
+  font-weight: 500;
+}
+.step-note {
   color: var(--ink-mute);
-  font-size: 12px;
+}
+
+.rule-term,
+.rule-empty {
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+.rule-term b,
+.rule-empty b {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.rule-empty {
+  gap: 0;
+  padding: 10px 12px;
+  line-height: 1.5;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  margin-left: 35px;
+}
+.rule-empty.is-warn {
+  color: var(--drain);
+  border-color: rgba(213, 152, 115, 0.4);
+  background: rgba(213, 152, 115, 0.06);
+}
+.rule-empty.is-warn b {
+  color: var(--drain);
+}
+.rule-add {
+  align-self: flex-start;
+  max-width: 340px;
+  color: var(--ink-mute);
 }
 
 /* rangée d'événement : une colonne de plus (case à cocher) que .row standard */
