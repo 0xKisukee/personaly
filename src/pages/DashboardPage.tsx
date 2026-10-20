@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
-import { useStore } from "../lib/store";
+import { useStore } from "../lib/useStore";
 import { simInput, planMilestones } from "../lib/types";
 import { project } from "../lib/projection";
 import {

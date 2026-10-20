@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useStore } from "../lib/store";
+import { useStore } from "../lib/useStore";
 import { projectionPath, viewFromSlug, type ProjectionViewId } from "../routes";
 import type { PlannedEvent, ProjectionParams } from "../lib/types";
 import { eventYear, simInput, planMilestones } from "../lib/types";

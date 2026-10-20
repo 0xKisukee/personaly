@@ -1,5 +1,5 @@
 /* Tests de chargement/migration du store (localStorage stubé). */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // stub localStorage AVANT l'import du module (loadState le lit à l'appel)
 const mem = new Map<string, string>();
@@ -9,8 +9,8 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void mem.delete(k),
 });
 
-import { loadState, migrateState, serializeState } from "./store";
-import { EMPTY_STATE, EPARGNE_ID, canReceiveDeposits } from "./types";
+import { RESCUE_KEY, createDebouncedWriter, loadState, migrateState, sanitizeState, serializeState } from "./persistence";
+import { DEFAULT_SETTINGS, EMPTY_STATE, EPARGNE_ID, SCHEMA_VERSION, canReceiveDeposits, type AppState } from "./types";
 
 const KEY = "personaly:v1";
 const write = (state: object) => mem.set(KEY, JSON.stringify(state));
@@ -18,11 +18,15 @@ const write = (state: object) => mem.set(KEY, JSON.stringify(state));
 beforeEach(() => mem.clear());
 
 describe("loadState", () => {
-  it("storage vide ou corrompu : état vierge avec un plan par défaut", () => {
+  it("storage vide ou corrompu : état vierge avec un plan par défaut ; le blob corrompu est mis de côté", () => {
     expect(loadState()).toEqual(EMPTY_STATE);
+    expect(mem.has(RESCUE_KEY)).toBe(false); // rien à sauver quand il n'y avait rien
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mem.set(KEY, "{pas du json");
     expect(loadState()).toEqual(EMPTY_STATE);
     expect(loadState().plans[0].projection.surplusTargets).toBeUndefined();
+    expect(mem.get(RESCUE_KEY)).toBe("{pas du json"); // copie brute : la prochaine écriture n'écrase pas la seule copie
+    warn.mockRestore();
   });
 
   it("migre un état PLAT (v1 sans plans) : événements/jalons/hypothèses → Plan principal", () => {
@@ -53,6 +57,7 @@ describe("loadState", () => {
     expect("scenario" in s.plans[0].projection).toBe(false);
     expect(s.plans[0].projection.horizon).toBe(20);
     expect(s.plans[0].projection.inflation).toBeDefined(); // clés manquantes complétées
+    expect(s.schemaVersion).toBe(SCHEMA_VERSION); // v1 (sans version) → estampillé au format courant
   });
 
   it("migre surplusTargetId (héritée) vers la cascade du plan, la clé est purgée", () => {
@@ -210,10 +215,17 @@ describe("export / import (round-trip)", () => {
     expect(restored).toEqual(state);
   });
 
-  it("migrateState est tolérant : entrée non-objet → état vierge", () => {
-    expect(migrateState(null)).toEqual(EMPTY_STATE);
-    expect(migrateState("nope")).toEqual(EMPTY_STATE);
-    expect(migrateState(42)).toEqual(EMPTY_STATE);
+  it("migrateState refuse un contenu qui n'est pas un objet (erreur lisible, pas d'état vierge silencieux)", () => {
+    for (const bad of [null, "nope", 42, [1, 2]]) {
+      expect(() => migrateState(bad)).toThrow(/pas un objet/);
+    }
+  });
+
+  it("export : la version est écrite EN TÊTE du fichier, toujours égale à SCHEMA_VERSION", () => {
+    const stale = { ...EMPTY_STATE, schemaVersion: 1 } as AppState; // un état mal estampillé en mémoire
+    const json = serializeState(stale);
+    expect(json.startsWith(`{\n  "schemaVersion": ${SCHEMA_VERSION},`)).toBe(true);
+    expect(JSON.parse(json).schemaVersion).toBe(SCHEMA_VERSION);
   });
 
   it("import d'un fichier ancien (état plat) : migré comme au chargement", () => {
@@ -222,5 +234,197 @@ describe("export / import (round-trip)", () => {
     expect(s.plans).toHaveLength(1);
     expect(s.plans[0].events).toHaveLength(1);
     expect(s.profile.firstName).toBe("Léo");
+  });
+});
+
+describe("version de schéma", () => {
+  it("un état sans version (v1) est migré par le chemin historique puis estampillé", () => {
+    const s = migrateState({ plans: [{ id: "p1", name: "P", projection: {} }], activePlanId: "p1" });
+    expect(s.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it("un état à la version courante repasse à l'identique (migrations idempotentes)", () => {
+    const state = { ...EMPTY_STATE, profile: { firstName: "Noa", birthDate: "1988-02-03" } };
+    expect(migrateState(JSON.parse(serializeState(state)))).toEqual(state);
+  });
+
+  it("un fichier d'une version PLUS RÉCENTE est refusé à l'import avec un message explicite", () => {
+    const future = { ...EMPTY_STATE, schemaVersion: SCHEMA_VERSION + 1 };
+    expect(() => migrateState(future)).toThrow(/plus récente/);
+    expect(() => migrateState(future)).toThrow(new RegExp(`schéma ${SCHEMA_VERSION + 1}`));
+  });
+
+  it("au chargement, une version future fait repartir à vide SANS perdre le blob (clé de secours)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const blob = JSON.stringify({ ...EMPTY_STATE, schemaVersion: 99, profile: { firstName: "Futur", birthDate: "" } });
+    mem.set(KEY, blob);
+    expect(loadState()).toEqual(EMPTY_STATE);
+    expect(mem.get(RESCUE_KEY)).toBe(blob);
+    warn.mockRestore();
+  });
+
+  it("une version illisible (chaîne, NaN) est traitée comme absente : tolérance, puis ré-estampillage", () => {
+    expect(migrateState({ ...EMPTY_STATE, schemaVersion: "2" }).schemaVersion).toBe(SCHEMA_VERSION);
+    expect(migrateState({ ...EMPTY_STATE, schemaVersion: null }).schemaVersion).toBe(SCHEMA_VERSION);
+  });
+});
+
+describe("sanitizeState (validation à l'import, sans dépendance)", () => {
+  const plan = (over: object = {}) => ({ id: "p1", name: "P", milestones: [], events: [], projection: {}, ...over });
+
+  it("champs numériques : non-nombre → 0 (obligatoire) ou clé retirée (optionnel) ; chaîne numérique acceptée", () => {
+    const s = migrateState({
+      assets: [{ id: "a", label: "PEA", category: "epargne", value: "abc", growthRate: null, incomeMode: "none", valueFloor: "abc", depositCap: "150000" }],
+      liabilities: [{ id: "l", label: "Prêt", category: "credit", outstanding: Infinity, rate: {} }],
+      incomes: [{ id: "i", label: "Salaire", category: "salaire", amount: "3000", period: "monthly", growth: "x" }],
+      plans: [plan()],
+      activePlanId: "p1",
+    });
+    expect(s.assets[0].value).toBe(0);
+    expect(s.assets[0].growthRate).toBe(0);
+    expect("valueFloor" in s.assets[0]).toBe(false);
+    expect(s.assets[0].depositCap).toBe(150000);
+    expect(s.liabilities[0].outstanding).toBe(0);
+    expect("rate" in s.liabilities[0]).toBe(false);
+    expect(s.incomes[0].amount).toBe(3000);
+    expect("growth" in s.incomes[0]).toBe(false);
+  });
+
+  it("collections : non-tableau → [] ; entrées non-objet purgées", () => {
+    const s = migrateState({ assets: null, liabilities: "x", incomes: 3, expenses: [null, 7, "y"], milestones: {}, plans: [plan()], activePlanId: "p1" });
+    expect(s.assets).toEqual([]);
+    expect(s.liabilities).toEqual([]);
+    expect(s.incomes).toEqual([]);
+    expect(s.expenses).toEqual([]);
+    expect(s.milestones).toEqual([]);
+  });
+
+  it("ids : string non vide sinon régénéré (la donnée est gardée, pas jetée)", () => {
+    const s = migrateState({
+      assets: [{ label: "Sans id", category: "epargne", value: 10, growthRate: 0, incomeMode: "none" }, { id: "", label: "Vide", category: "autre", value: 1, growthRate: 0, incomeMode: "none" }],
+      plans: [plan({ id: 42 })],
+      activePlanId: "p1",
+    });
+    expect(s.assets).toHaveLength(2);
+    for (const a of s.assets) expect(typeof a.id === "string" && a.id.length > 0).toBe(true);
+    expect(s.assets[0].label).toBe("Sans id");
+    expect(typeof s.plans[0].id).toBe("string");
+    expect(s.activePlanId).toBe(s.plans[0].id); // l'id actif suit le plan régénéré
+  });
+
+  it("événements : sans `kind` connu ou sans cible obligatoire → purgés ; les autres sont forcés", () => {
+    const s = migrateState({
+      plans: [plan({
+        events: [
+          { id: "nokind", label: "?", year: 2030, amount: 5 },
+          { id: "badkind", kind: "teleport", label: "?", year: 2030 },
+          null,
+          { id: "buy-noasset", kind: "buy", label: "Achat", year: 2030, price: 1 },
+          { id: "sell-noid", kind: "sell", label: "Vente", year: 2030 },
+          { id: "tr-noto", kind: "transfer", label: "T", year: 2030, fromId: "a", amount: 1 },
+          { kind: "cash", label: "Prime", year: "2031", amount: "1500", recurrence: { everyYears: "x" } },
+          { id: "ok-buy", kind: "buy", label: "Voiture", year: 2032, price: 20000, asset: { label: "Auto", category: "vehicule", value: "20000", growthRate: -15 } },
+        ],
+      })],
+      activePlanId: "p1",
+    });
+    const ev = s.plans[0].events;
+    expect(ev.map((e) => e.kind)).toEqual(["cash", "buy"]);
+    const cash = ev[0];
+    expect(typeof cash.id === "string" && cash.id.length > 0).toBe(true);
+    expect(cash.year).toBe(2031);
+    expect(cash.kind === "cash" && cash.amount).toBe(1500);
+    expect("recurrence" in cash).toBe(false); // motif inexploitable → ponctuel
+    const buy = ev[1];
+    if (buy.kind === "buy") {
+      expect(buy.asset.value).toBe(20000);
+      expect(buy.asset.incomeMode).toBe("none");
+      expect(typeof buy.asset.id).toBe("string");
+    }
+  });
+
+  it("énumérations : catégorie/mode inconnus retombent sur une valeur sûre (pas de crash d'affichage)", () => {
+    const s = migrateState({
+      assets: [{ id: "a", label: "X", category: "crypto", value: 1, growthRate: 0, incomeMode: "yolo", income: { amount: 10, period: "weekly" } }],
+      liabilities: [{ id: "l", label: "L", category: "dette_mafia", outstanding: 1 }],
+      incomes: [{ id: "i", label: "I", category: "loto", amount: 1, period: "daily", nature: "mixte" }],
+      expenses: [{ id: "e", label: "E", category: "???", amount: 1, period: "yearly" }],
+      plans: [plan({ projection: { surplusTargets: [{ assetId: "a", mode: "all" }, { mode: "max" }, "liv"], withdrawalTargets: ["a", 3, null] } })],
+      activePlanId: "p1",
+    });
+    expect(s.assets[0].category).toBe("autre");
+    expect(s.assets[0].incomeMode).toBe("none");
+    expect(s.assets[0].income).toEqual({ amount: 10, period: "monthly" });
+    expect(s.liabilities[0].category).toBe("autre");
+    expect(s.incomes[0].category).toBe("autre");
+    expect(s.incomes[0].period).toBe("monthly");
+    expect("nature" in s.incomes[0]).toBe(false);
+    expect(s.expenses[0].category).toBe("autre");
+    expect(s.plans[0].projection.surplusTargets).toEqual([{ assetId: "a", mode: "max" }, { assetId: "liv", mode: "max" }]);
+    expect(s.plans[0].projection.withdrawalTargets).toEqual(["a"]);
+  });
+
+  it("profil, réglages, jalons : types forcés ; un jalon sans année est purgé", () => {
+    const s = migrateState({
+      profile: "Camille",
+      settings: { horizon: "abc", realTerms: "oui" },
+      milestones: [{ id: "m", label: "Retraite", year: "2057" }, { id: "m2", label: "Sans année" }],
+      plans: [plan({ projection: { horizon: 25, inflation: "2.5", indexIncomes: 1 } })],
+      activePlanId: "p1",
+    });
+    expect(s.profile).toEqual({ firstName: "", birthDate: "" });
+    expect(s.settings.horizon).toBe(DEFAULT_SETTINGS.horizon); // présent mais illisible → défaut (le hissage depuis le plan ne joue que si la clé est ABSENTE)
+    expect(s.settings.realTerms).toBe(false);
+    expect(s.milestones).toEqual([{ id: "m", label: "Retraite", year: 2057 }]);
+    expect(s.plans[0].projection.inflation).toBe(2.5);
+    expect(s.plans[0].projection.indexIncomes).toBe(true); // défaut
+  });
+
+  it("est idempotent et conserve les clés inconnues (tolérance)", () => {
+    const once = migrateState({ assets: [{ id: "a", label: "A", category: "epargne", value: 1, growthRate: 0, incomeMode: "none", futur: "x" }], plans: [plan()], activePlanId: "p1" });
+    expect((once.assets[0] as unknown as { futur: string }).futur).toBe("x");
+    expect(sanitizeState(once)).toEqual(once);
+  });
+});
+
+describe("createDebouncedWriter (sauvegarde différée)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("regroupe les changements rapprochés en UNE écriture du dernier état", () => {
+    const write = vi.fn();
+    const w = createDebouncedWriter(write, 300);
+    const s1 = { ...EMPTY_STATE, activePlanId: "1" };
+    const s2 = { ...EMPTY_STATE, activePlanId: "2" };
+    w.schedule(s1);
+    vi.advanceTimersByTime(200);
+    w.schedule(s2);
+    vi.advanceTimersByTime(200);
+    expect(write).not.toHaveBeenCalled(); // 200 ms après le DERNIER changement seulement
+    vi.advanceTimersByTime(100);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith(s2);
+  });
+
+  it("flush() écrit immédiatement ce qui est en attente (fermeture d'onglet), une seule fois", () => {
+    const write = vi.fn();
+    const w = createDebouncedWriter(write, 300);
+    w.flush(); // rien en attente : no-op
+    expect(write).not.toHaveBeenCalled();
+    w.schedule(EMPTY_STATE);
+    w.flush();
+    expect(write).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000);
+    expect(write).toHaveBeenCalledTimes(1); // le timer a bien été annulé
+  });
+
+  it("cancel() abandonne l'écriture en attente (réinitialisation)", () => {
+    const write = vi.fn();
+    const w = createDebouncedWriter(write, 300);
+    w.schedule(EMPTY_STATE);
+    w.cancel();
+    vi.advanceTimersByTime(1000);
+    w.flush();
+    expect(write).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { useStore } from "../lib/store";
+import { useStore } from "../lib/useStore";
 import type {
   Asset,
   ExpenseCategory,

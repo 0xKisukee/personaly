@@ -1,4 +1,4 @@
-import { useStore } from "../lib/store";
+import { useStore } from "../lib/useStore";
 import { ESPERANCE_AGE, ESPERANCE_MILESTONE_ID } from "../lib/types";
 import { ageFrom } from "../lib/format";
 import Modal from "./Modal";

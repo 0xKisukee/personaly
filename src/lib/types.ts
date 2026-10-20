@@ -536,7 +536,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
   realTerms: DEFAULT_PROJECTION.realTerms,
 };
 
+/**
+ * VERSION DU SCHÉMA persisté (localStorage + fichiers d'export).
+ *  - absente (v1) : états d'avant le versionnage — migrés par le chemin tolérant historique
+ *    (plat → plans, scénarios, deposit → transfer…) puis estampillés.
+ *  - 2 : format courant, estampillé à chaque écriture (`serializeState`, persistance).
+ * Un fichier portant une version SUPÉRIEURE vient d'une app plus récente : il est REFUSÉ à
+ * l'import (erreur lisible) plutôt que tronqué en silence. N'incrémenter QUE pour un
+ * changement de format qu'une version antérieure ne saurait pas relire — les anciennes
+ * builds refuseront alors les nouveaux fichiers, c'est le but.
+ */
+export const SCHEMA_VERSION = 2;
+
 export interface AppState {
+  /** Version du schéma (cf. `SCHEMA_VERSION`). Toujours présente après `migrateState`. */
+  schemaVersion: number;
   profile: Profile;
   settings: AppSettings;
   /** Jalons GLOBAUX (source de vérité, présents dans TOUS les plans) : c'est le
@@ -558,6 +572,7 @@ export const ESPERANCE_MILESTONE_ID = "esperance-vie";
 export const ESPERANCE_AGE = 85;
 
 export const EMPTY_STATE: AppState = {
+  schemaVersion: SCHEMA_VERSION,
   profile: { firstName: "", birthDate: "" },
   settings: DEFAULT_SETTINGS,
   milestones: [{ id: ESPERANCE_MILESTONE_ID, label: "Espérance de vie", year: new Date().getFullYear() + 60 }],
