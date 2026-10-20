@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { serializeState } from "../lib/persistence";
+import { downloadStateJson, migrateState } from "../lib/persistence";
 import { useStore } from "../lib/useStore";
 import { DEFAULT_PLAN, type Plan } from "../lib/types";
 import { netWealth } from "../lib/selectors";
@@ -109,8 +109,10 @@ function DataControls() {
   const { state, importState, reset } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // indicateur « Enregistré » : l'état est persisté à chaque changement (store),
-  // on le rend visible par un flash discret.
+  // indicateur « Enregistré » : il écoute `state` (le CHANGEMENT), pas l'écriture
+  // effective — que le store DIFFÈRE de ~300 ms (regroupement des frappes) et garantit
+  // à la fermeture de l'onglet. Acceptable : l'écart est imperceptible et le sens pour
+  // l'utilisateur est « c'est pris en compte », pas « l'octet est sur le disque ».
   const [flash, setFlash] = useState(false);
   const first = useRef(true);
   useEffect(() => {
@@ -123,30 +125,34 @@ function DataControls() {
     return () => clearTimeout(t);
   }, [state]);
 
-  const exportJSON = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const blob = new Blob([serializeState(state)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `personaly-${today}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportJSON = () => downloadStateJson(state); // logique partagée avec la page de secours (ErrorBoundary)
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // permet de re-sélectionner le même fichier
     if (!file) return;
     const text = await file.text();
+    let parsed: unknown;
     try {
-      JSON.parse(text); // valide le JSON avant de demander confirmation
+      parsed = JSON.parse(text);
     } catch {
       window.alert("Fichier invalide : ce n'est pas un JSON lisible.");
       return;
     }
+    // validation À BLANC avant de demander confirmation : un fichier inexploitable (pas un
+    // objet, version plus récente de l'app) est refusé avec son motif, les données restent.
+    try {
+      migrateState(parsed);
+    } catch (err) {
+      window.alert(`Import refusé : ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
     if (!window.confirm("Remplacer TOUTES tes données actuelles par le contenu de ce fichier ?")) return;
-    importState(text);
+    try {
+      importState(text);
+    } catch (err) {
+      window.alert(`Import refusé : ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   const onReset = () => {

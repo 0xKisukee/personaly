@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AppState, Asset, Liability } from "./types";
-import { DEFAULT_PLAN, DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_PLAN, DEFAULT_SETTINGS, SCHEMA_VERSION } from "./types";
 import {
   assetYearlyIncome, assetYearlyGrowth, grossWealth, totalLiabilities, netWealth,
   patrimoineIncomeYearly, extraIncomeYearly, capitalizedGrowthYearly,
@@ -18,6 +18,7 @@ const asset = (over: Partial<Asset>): Asset => ({
   id: "a", label: "A", category: "epargne", value: 0, growthRate: 0, incomeMode: "none", ...over,
 });
 const state = (over: Partial<AppState>): AppState => ({
+  schemaVersion: SCHEMA_VERSION,
   profile: { firstName: "", birthDate: "" },
   settings: DEFAULT_SETTINGS,
   milestones: [],

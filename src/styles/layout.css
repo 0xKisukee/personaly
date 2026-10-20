@@ -1010,3 +1010,53 @@
   }
 }
 
+
+/* ---------- page de secours (components/ErrorBoundary) ---------- */
+/* rendue À LA PLACE du shell (pas de sidebar) : pleine page, carte centrée */
+.crash {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px clamp(24px, 4vw, 64px);
+}
+.crash-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 36px 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.crash-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.crash-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.crash-msg {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(243, 239, 228, 0.04);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--drain);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+}
+.crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}

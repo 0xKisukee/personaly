@@ -141,6 +141,12 @@
   background: rgba(243, 239, 228, 0.05);
   color: var(--ink);
 }
+/* action destructive (page de secours ErrorBoundary) */
+.btn-danger:hover {
+  border-color: rgba(213, 152, 115, 0.4);
+  color: var(--drain);
+  background: rgba(213, 152, 115, 0.06);
+}
 
 /* form fields */
 .field {
