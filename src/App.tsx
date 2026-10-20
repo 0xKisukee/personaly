@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { StoreProvider } from "./lib/store";
 import { DEFAULT_PATH, ROUTES } from "./routes";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import PatrimoinePage from "./pages/PatrimoinePage";
@@ -58,7 +59,10 @@ export default function App() {
     <StoreProvider>
       <MotionConfig reducedMotion="user">
         <BrowserRouter>
-          <Shell />
+          {/* filet de sécurité DANS le StoreProvider : la page de secours peut exporter l'état */}
+          <ErrorBoundary>
+            <Shell />
+          </ErrorBoundary>
         </BrowserRouter>
       </MotionConfig>
     </StoreProvider>
