@@ -43,7 +43,9 @@ src/
 ├── routes.tsx          # table de routes + slugs des sous-vues Projection
 ├── lib/                # modèle & logique PURE (testée)
 │   ├── types.ts        # modèle = source de vérité (AppState, Asset, Plan, SimState…)
-│   ├── store.tsx       # contexte React + persistance + MIGRATIONS + export/import
+│   ├── store.tsx       # StoreProvider (composant seul, Fast Refresh)
+│   ├── useStore.ts     # contexte React + hook useStore
+│   ├── persistence.ts  # localStorage + MIGRATIONS + export/import (pur, testé)
 │   ├── assets.ts       # REGISTRE des types d'actifs (méta, presets, familles, normalizeAsset)
 │   ├── selectors.ts    # calculs dérivés (patrimoine, flux, comptabilité, assetPerformance)
 │   ├── projection.ts   # MOTEUR mois par mois (déterministe + stochastique)
@@ -167,7 +169,7 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   Une destination-actif respecte son **plafond de versements** (`capLeftByAsset`, partagé avec la
   cascade du surplus) ; l'Épargne n'a pas de plafond (∞, un découvert est signalé). Montant borné
   par `min(demandé, solde source, capacité destination)`. Migration : les `deposit` persistés
-  deviennent des `transfer` depuis l'Épargne (`store.tsx`).
+  deviennent des `transfer` depuis l'Épargne (`persistence.ts`).
 - **Euros constants vs courants** (`nominal?` sur **tout** événement) : par **défaut** un montant est en
   **euros d'aujourd'hui** — le moteur l'**indexe sur l'inflation** jusqu'à l'année de l'événement
   (`evInfl`), donc un don de 150 k€ en 2050 = 150 k€ de pouvoir d'achat actuel (plus élevé nominalement,
@@ -304,7 +306,7 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   `:focus-visible` global ; `role="dialog"` + focus-trap. **`@media print`** recolore toute l'app
   (SVG compris) en surchargeant les **tokens** (sombre→clair) et masque nav/boutons. Export JSON
   tagué `charset=utf-8` (anti-mojibake).
-- **Migrations tolérantes** (`store.tsx`, `loadState`/`migrateState`) : l'import passe par les
+- **Migrations tolérantes** (`persistence.ts`, `loadState`/`migrateState`) : l'import passe par les
   **mêmes garanties**, tout se réécrit propre au prochain `setState`. Migrations actives :
   état **plat → plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios
   retirés** (événement `scenario` → `disabled:true`, clé purgée) ; **versement `deposit` → `transfer`
@@ -345,5 +347,5 @@ optionnel (la projection principale reste déterministe).
 2. `lib/projection.ts` — le moteur mois par mois (le cœur, le plus testé).
 3. `lib/assets.ts` — le registre des types d'actifs (taxonomie, presets, familles).
 4. `lib/selectors.ts` — calculs dérivés (patrimoine, flux, `assetPerformance`).
-5. `lib/store.tsx` — persistance + migrations (après tout changement de modèle).
+5. `lib/persistence.ts` — persistance + migrations (après tout changement de modèle).
 6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 5 vues).

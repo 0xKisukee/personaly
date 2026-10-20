@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { useStore } from "../../lib/store";
+import { useStore } from "../../lib/useStore";
 import type { Asset, ProjectionParams, SimState } from "../../lib/types";
 import type { YearPoint } from "../../lib/projection";
 import { DEFAULT_VOLATILITY } from "../../lib/assets";

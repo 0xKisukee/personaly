@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { money, signedMoney, percent, toYearly, toMonthly, periodLabel, ageFrom, isActiveYear, uid } from "./format";
 
 /** Normalise les espaces insécables fr-FR pour des assertions lisibles. */
-const n = (s: string) => s.replace(/[  ]/g, " ");
+const n = (s: string) => s.replace(/[\u202F\u00A0]/g, " ");
 
 describe("money / signedMoney / percent", () => {
   it("formate en euros sans décimales", () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { serializeState, useStore } from "../lib/store";
+import { serializeState } from "../lib/persistence";
+import { useStore } from "../lib/useStore";
 import { DEFAULT_PLAN, type Plan } from "../lib/types";
 import { netWealth } from "../lib/selectors";
 import { ageFrom, money, uid } from "../lib/format";
