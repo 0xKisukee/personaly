@@ -16,6 +16,9 @@ passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 - **motion** pour les animations (enveloppé dans `<MotionConfig reducedMotion="user">`).
 - **Aucune** lib de graphes : tout est en **SVG maison**. Pas de lib UI (design system maison).
 - **Thème sombre uniquement** ; feuille `@media print` pour un export papier propre.
+- **Déploiement** : `vercel.json` réécrit toute URL vers `index.html` pour que les deep links du
+  `BrowserRouter` (ex. `/projection/evenements`) survivent à un refresh. CI GitHub (`.github/workflows/ci.yml`) :
+  lint + tests + build sur chaque push / PR.
 
 ```bash
 npm run dev       # dev
