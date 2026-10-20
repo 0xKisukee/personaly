@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { motion } from "motion/react";
 import type { Milestone } from "../../lib/types";
 import type { ProjectionEvent, YearPoint } from "../../lib/projection";
@@ -24,6 +24,10 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
   onEventClick?: (id: string) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  // id unique : plusieurs graphes coexistent (aperçus de plans du Dashboard) et un
+  // <linearGradient id> dupliqué ferait pointer tous les fill="url(#…)" sur le 1er.
+  // (`useId` renvoie « :r1: » / « «r1» » : on ne garde que l'alphanumérique pour un url(#…) sûr.)
+  const gradId = `area-grad-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [hover, setHover] = useState<number | null>(null);
 
   const W = 1000, H = 340;
@@ -141,7 +145,7 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
     <div className="chart-wrap" ref={wrapRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg">
         <defs>
-          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--brass)" stopOpacity="0.34" />
             <stop offset="100%" stopColor="var(--brass)" stopOpacity="0" />
           </linearGradient>
@@ -199,7 +203,7 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
           </>
         ) : (
           <>
-            <motion.path d={area} fill="url(#area-grad)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} />
+            <motion.path d={area} fill={`url(#${gradId})`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} />
             <motion.path d={line} fill="none" stroke="var(--brass-bright)" strokeWidth="2.5" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut" }} />
           </>
         )}
