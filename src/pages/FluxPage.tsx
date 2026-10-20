@@ -557,6 +557,7 @@ export default function FluxPage() {
         <FlowModal
           kind="income"
           draft={incomeDraft}
+          isNew={!state.incomes.some((i) => i.id === incomeDraft.id)}
           categories={INCOME_META}
           milestones={state.milestones}
           onChange={(d) => setIncomeDraft(d as IncomeItem)}
@@ -568,6 +569,7 @@ export default function FluxPage() {
         <FlowModal
           kind="expense"
           draft={expenseDraft}
+          isNew={!state.expenses.some((e) => e.id === expenseDraft.id)}
           categories={EXPENSE_META}
           milestones={state.milestones}
           onChange={(d) => setExpenseDraft(d as ExpenseItem)}
@@ -670,6 +672,7 @@ interface FlowDraft {
 function FlowModal({
   kind,
   draft,
+  isNew,
   categories,
   milestones,
   onChange,
@@ -678,6 +681,7 @@ function FlowModal({
 }: {
   kind: "income" | "expense";
   draft: FlowDraft;
+  isNew: boolean;
   categories: Record<string, { label: string; icon: IconC }>;
   milestones: Milestone[];
   onChange: (d: FlowDraft) => void;
@@ -696,9 +700,9 @@ function FlowModal({
     <Modal
       open
       title={
-        draft.label
-          ? isIncome ? "Modifier le revenu" : "Modifier la dépense"
-          : isIncome ? "Nouveau revenu complémentaire" : "Nouvelle dépense"
+        isNew
+          ? isIncome ? "Nouveau revenu complémentaire" : "Nouvelle dépense"
+          : isIncome ? "Modifier le revenu" : "Modifier la dépense"
       }
       subtitle={
         isIncome

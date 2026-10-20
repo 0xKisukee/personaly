@@ -321,6 +321,7 @@ export default function PatrimoinePage() {
       {assetDraft && (
         <AssetModal
           draft={assetDraft}
+          isNew={!state.assets.some((a) => a.id === assetDraft.id)}
           onChange={setAssetDraft}
           onSave={saveAsset}
           onClose={() => setAssetDraft(null)}
@@ -329,6 +330,7 @@ export default function PatrimoinePage() {
       {liabDraft && (
         <LiabilityModal
           draft={liabDraft}
+          isNew={!state.liabilities.some((l) => l.id === liabDraft.id)}
           onChange={setLiabDraft}
           onSave={saveLiab}
           onClose={() => setLiabDraft(null)}
@@ -442,11 +444,13 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
 /* ----------------------- ASSET MODAL ----------------------- */
 function AssetModal({
   draft,
+  isNew,
   onChange,
   onSave,
   onClose,
 }: {
   draft: Asset;
+  isNew: boolean;
   onChange: (a: Asset) => void;
   onSave: (a: Asset) => void;
   onClose: () => void;
@@ -478,7 +482,7 @@ function AssetModal({
   return (
     <Modal
       open
-      title={draft.label ? "Modifier l'actif" : "Nouvel actif"}
+      title={isNew ? "Nouvel actif" : "Modifier l'actif"}
       subtitle="La valeur alimente le patrimoine brut. Le revenu (optionnel) alimentera les flux entrants."
       onClose={onClose}
     >
@@ -735,11 +739,13 @@ function AssetModal({
 /* --------------------- LIABILITY MODAL --------------------- */
 function LiabilityModal({
   draft,
+  isNew,
   onChange,
   onSave,
   onClose,
 }: {
   draft: Liability;
+  isNew: boolean;
   onChange: (l: Liability) => void;
   onSave: (l: Liability) => void;
   onClose: () => void;
@@ -762,7 +768,7 @@ function LiabilityModal({
   return (
     <Modal
       open
-      title={draft.label ? "Modifier le passif" : "Nouveau passif"}
+      title={isNew ? "Nouveau passif" : "Modifier le passif"}
       subtitle="Le capital restant dû réduit le patrimoine net. Pour un emprunt, la durée fixe la date de fin et la mensualité se calcule seule."
       onClose={onClose}
     >
