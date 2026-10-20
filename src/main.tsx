@@ -1,5 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Polices auto-hébergées (fontsource) — AVANT tokens.css, aucune requête externe :
+import '@fontsource-variable/fraunces/opsz.css'         // Fraunces : axes opsz + wght
+import '@fontsource-variable/fraunces/opsz-italic.css'  // … et son italique
+import '@fontsource-variable/hanken-grotesk'            // Hanken Grotesk : wght 100..900
+import '@fontsource/spline-sans-mono/400.css'
+import '@fontsource/spline-sans-mono/500.css'
+import '@fontsource/spline-sans-mono/600.css'
 // Design system éclaté — ordre = cascade (ne pas réordonner) :
 import './styles/tokens.css'      // variables (couleurs, type, espace, rayons, ombres)
 import './styles/base.css'        // reset, body, scrollbars, typographie
