@@ -86,17 +86,6 @@
   font-weight: 500;
   letter-spacing: 0.04em;
 }
-.nav-item .nav-soon {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  color: var(--ink-faint);
-  border: 1px solid var(--line);
-  border-radius: 99px;
-  padding: 2px 7px;
-  align-self: center;
-}
 .nav-item[data-active="true"] {
   color: var(--ink);
   background: linear-gradient(90deg, rgba(203, 169, 107, 0.14), rgba(203, 169, 107, 0.02));
@@ -344,28 +333,6 @@
   color: var(--brass);
 }
 
-/* trajectoire */
-.dash-horizons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-.dash-horizon-y {
-  font-size: 12px;
-  color: var(--ink-mute);
-  margin-bottom: 6px;
-}
-.dash-horizon-v {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  letter-spacing: -0.01em;
-}
-.dash-horizon-d {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  margin-top: 3px;
-}
-
 /* flux */
 .dash-flux > div {
   display: flex;
@@ -442,23 +409,6 @@
   border-radius: 999px;
 }
 
-/* à venir */
-.dash-next {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.dash-next-item .eyebrow {
-  margin-bottom: 6px;
-}
-.dash-next-v {
-  font-size: 15px;
-  color: var(--ink);
-}
-.dash-next-v span {
-  color: var(--ink-mute);
-  font-size: 13px;
-}
 .dash-muted {
   color: var(--ink-faint);
   font-size: 13.5px;

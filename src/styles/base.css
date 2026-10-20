@@ -120,8 +120,7 @@ body::before {
   }
   /* les inputs/selects ont un fond rgba sombre codé en dur (pas un token) → forcer clair */
   .input,
-  .select,
-  .money-input {
+  .select {
     background: #fff !important;
     color: var(--ink) !important;
     border-color: var(--line-strong) !important;
@@ -176,10 +175,6 @@ select {
   font-weight: 500;
   line-height: 1.04;
   letter-spacing: -0.01em;
-}
-.serif {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
 }
 .mono {
   font-family: var(--font-mono);

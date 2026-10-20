@@ -58,7 +58,6 @@ export default function Sidebar() {
           >
             <span className="nav-idx">{String(i).padStart(2, "0")}</span>
             <span className="nav-label">{r.label}</span>
-            {r.soon && <span className="nav-soon">bientôt</span>}
           </button>
         ))}
 

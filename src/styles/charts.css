@@ -494,13 +494,6 @@
   flex: none;
 }
 
-.proj-events {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
 .proj-table-wrap {
   max-height: 420px;
   overflow-y: auto;
@@ -609,34 +602,6 @@
   width: 15px;
   height: 15px;
   cursor: pointer;
-}
-
-/* --------------------------- SOON ------------------------------ */
-.soon-wrap {
-  display: grid;
-  place-items: center;
-  min-height: 60vh;
-  text-align: center;
-}
-.soon-card {
-  max-width: 460px;
-  padding: 48px 40px;
-}
-.soon-card .glyph {
-  font-family: var(--font-display);
-  font-size: 60px;
-  color: var(--brass);
-  line-height: 1;
-}
-.soon-card h2 {
-  font-family: var(--font-display);
-  font-weight: 480;
-  font-size: 30px;
-  margin: 20px 0 10px;
-}
-.soon-card p {
-  color: var(--ink-mute);
-  font-size: 14.5px;
 }
 
 /* ----------------------- SIDEBAR : PLANS ----------------------- */
@@ -752,16 +717,6 @@
 }
 
 /* ------------------- PROJECTION : NAV DE VUES ------------------- */
-.proj-nav {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 22px;
-}
-.proj-nav .spacer {
-  flex: 1;
-}
 .view-tabs button {
   font-size: 13.5px;
   padding: 8px 16px;
@@ -1016,8 +971,7 @@
   .nav {
     flex-direction: row;
   }
-  .nav-item .nav-idx,
-  .nav-item .nav-soon {
+  .nav-item .nav-idx {
     display: none;
   }
   .brand {

@@ -53,7 +53,7 @@ src/
 │   ├── finance.ts      # amortissement (mensualité, split intérêts/capital)
 │   └── format.ts       # money(), percent(), périodes, âge, whenLabel(), uid()
 ├── ui/                 # PRIMITIVES du design system (enrobent les classes CSS)
-│   └── Button Input Field Select Segment Card Tag MoneyInput Donut PerformanceBadge(+perfColor)
+│   └── Input Field Select Segment Donut PerformanceBadge (+ perfColor.ts)
 ├── components/         # composants transverses
 │   ├── Modal.tsx       # modale générique : PORTAIL vers <body>, focus-trap, verrou de scroll, Escape
 │   ├── Sidebar.tsx     # nav (00→03) + liste des PLANS + patrimoine net + accès Paramètres
