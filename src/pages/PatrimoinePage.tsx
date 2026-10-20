@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useStore } from "../lib/useStore";
 import type {
   Asset,
@@ -163,7 +163,7 @@ export default function PatrimoinePage() {
         lede="Tes actifs forment le patrimoine brut ; tes passifs s'en déduisent pour donner le patrimoine net."
       />
 
-      <motion.div
+      <m.div
         className="wealth-hero"
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -184,7 +184,7 @@ export default function PatrimoinePage() {
           <div className={"v " + (liab > 0 ? "neg" : "")}>{liab > 0 ? "−" + money(liab) : money(0)}</div>
           <div className="sub">{state.liabilities.length} passif{state.liabilities.length > 1 ? "s" : ""}</div>
         </div>
-      </motion.div>
+      </m.div>
 
       {/* répartition générale : camembert actifs + camembert passifs (niveau page) */}
       {(gross > 0 || liabGroups.length > 0) && (
@@ -276,7 +276,7 @@ export default function PatrimoinePage() {
         ) : (
           <div className="rows">
             {state.liabilities.map((l, i) => (
-              <motion.div
+              <m.div
                 key={l.id}
                 className="row"
                 initial={{ opacity: 0, y: 8 }}
@@ -311,7 +311,7 @@ export default function PatrimoinePage() {
                     <IconTrash size={16} />
                   </button>
                 </div>
-              </motion.div>
+              </m.div>
             ))}
           </div>
         )}
@@ -387,7 +387,7 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
     (perf.cashPct ? ` · valeur ${sp(perf.latentPct)} · distribué net ${sp(perf.cashPct)}` : "");
 
   return (
-    <motion.div
+    <m.div
       className="row"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -437,7 +437,7 @@ function AssetRow({ a, i, onEdit, onDelete }: { a: Asset; i: number; onEdit: () 
           <IconTrash size={16} />
         </button>
       </div>
-    </motion.div>
+    </m.div>
   );
 }
 

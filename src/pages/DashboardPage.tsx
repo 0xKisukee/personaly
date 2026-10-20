@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/useStore";
 import { simInput, planMilestones } from "../lib/types";
@@ -80,7 +80,7 @@ export default function DashboardPage() {
       />
 
       {!hasData ? (
-        <motion.button
+        <m.button
           className="card dash-empty"
           onClick={() => navigate("/patrimoine")}
           initial={{ opacity: 0, y: 14 }}
@@ -93,11 +93,11 @@ export default function DashboardPage() {
             <div className="dash-empty-sub">Ajoute un premier actif (bien, épargne, véhicule…) pour voir ta vue d'ensemble se remplir.</div>
           </div>
           <IconChevron size={20} />
-        </motion.button>
+        </m.button>
       ) : (
         <>
           {/* hero patrimoine */}
-          <motion.div
+          <m.div
             className="wealth-hero"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
               <div className={"v " + (liab > 0 ? "neg" : "")}>{liab > 0 ? "−" + money(liab) : money(0)}</div>
               <div className="sub">{state.liabilities.length} passif{state.liabilities.length > 1 ? "s" : ""}</div>
             </div>
-          </motion.div>
+          </m.div>
 
           <div className="dash-grid">
             {/* répartition */}
@@ -183,7 +183,7 @@ export default function DashboardPage() {
                   const end = points[points.length - 1];
                   const endAge = birthYear != null ? end.year - birthYear : null;
                   return (
-                    <motion.div
+                    <m.div
                       key={plan.id}
                       className="card dash-plan"
                       role="button"
@@ -201,7 +201,7 @@ export default function DashboardPage() {
                         <span className="dash-plan-end">{money(end.netWorth)} <em>{endAge != null ? `à ${endAge} ans` : `en ${end.year}`}</em></span>
                       </div>
                       <NetWorthChart points={points} events={events} milestones={planMilestones(state, plan)} mode="net" />
-                    </motion.div>
+                    </m.div>
                   );
                 })}
               </div>
@@ -224,7 +224,7 @@ function DashCard({
   children: React.ReactNode;
 }) {
   return (
-    <motion.button
+    <m.button
       type="button"
       className="card dash-card"
       onClick={onClick}
@@ -237,6 +237,6 @@ function DashCard({
         <span className="dash-card-hint">{hint} <IconChevron size={14} /></span>
       </div>
       {children}
-    </motion.button>
+    </m.button>
   );
 }

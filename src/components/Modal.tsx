@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { IconClose } from "./icons";
 
 interface Props {
@@ -72,7 +72,7 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           className="scrim"
           onMouseDown={(e) => e.target === e.currentTarget && onClose()}
           initial={{ opacity: 0 }}
@@ -80,7 +80,7 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
         >
-          <motion.div
+          <m.div
             className="modal"
             ref={modalRef}
             role="dialog"
@@ -101,8 +101,8 @@ export default function Modal({ open, title, subtitle, onClose, children }: Prop
               </button>
             </div>
             <div style={{ marginTop: 22 }}>{children}</div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>,
     document.body

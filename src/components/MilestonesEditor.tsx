@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 import type { Milestone } from "../lib/types";
 import { uid } from "../lib/format";
@@ -62,9 +62,9 @@ export default function MilestonesEditor({ milestones, birthYear, onChange, titl
           {milestones
             .slice()
             .sort((a, b) => a.year - b.year)
-            .map((m, i) => (
-              <motion.div
-                key={m.id}
+            .map((ms, i) => (
+              <m.div
+                key={ms.id}
                 className="row ms-row"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -74,22 +74,22 @@ export default function MilestonesEditor({ milestones, birthYear, onChange, titl
                 <input
                   className="input"
                   placeholder="ex. Retraite, Achat maison…"
-                  value={m.label}
-                  onChange={(e) => setMilestone(m.id, { label: e.target.value })}
+                  value={ms.label}
+                  onChange={(e) => setMilestone(ms.id, { label: e.target.value })}
                 />
                 <input
                   className="input mono ms-year"
                   type="number"
-                  value={m.year || ""}
-                  onChange={(e) => setMilestone(m.id, { year: Number(e.target.value) })}
+                  value={ms.year || ""}
+                  onChange={(e) => setMilestone(ms.id, { year: Number(e.target.value) })}
                 />
                 <span className="ms-age mono">
-                  {birthYear ? `${m.year - birthYear} ans` : ""}
+                  {birthYear ? `${ms.year - birthYear} ans` : ""}
                 </span>
-                <button className="icon-btn danger" onClick={() => delMilestone(m.id)} aria-label="Supprimer">
+                <button className="icon-btn danger" onClick={() => delMilestone(ms.id)} aria-label="Supprimer">
                   <IconTrash size={16} />
                 </button>
-              </motion.div>
+              </m.div>
             ))}
         </div>
       )}

@@ -5,8 +5,9 @@ Objectif : modéliser finement l'évolution du patrimoine net dans le temps — 
 passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 
 > **100 % local** : aucun compte, aucun backend. Tout vit dans le `localStorage`
-> (`personaly:v1`). Aucune donnée ne quitte le navigateur. Export / import JSON
-> (fichier **versionné** par `schemaVersion`, validé à l'import).
+> (`personaly:v1`). Aucune donnée ne quitte le navigateur — polices **auto-hébergées**, donc
+> **aucune requête externe**, même au chargement. **PWA** installable, fonctionne **hors-ligne**.
+> Export / import JSON (fichier **versionné** par `schemaVersion`, validé à l'import).
 
 ---
 
@@ -14,9 +15,20 @@ passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 
 - **Vite** + **React 19** + **TypeScript**.
 - **react-router-dom** (`BrowserRouter`) — URLs réelles, deep-link, back/forward.
-- **motion** pour les animations (enveloppé dans `<MotionConfig reducedMotion="user">`).
+- **motion** pour les animations — via `<LazyMotion features={domAnimation} strict>` et les
+  composants **`m.*`** (jamais `motion.*`, voir Conventions), sous `<MotionConfig reducedMotion="user">`.
 - **Aucune** lib de graphes : tout est en **SVG maison**. Pas de lib UI (design system maison).
 - **Thème sombre uniquement** ; feuille `@media print` pour un export papier propre.
+- **Polices auto-hébergées** (`@fontsource`, importées dans `main.tsx` AVANT `tokens.css`) : plus
+  aucune requête vers Google Fonts. Sous-ensembles latin + latin-ext (le français n'a besoin de
+  rien d'autre).
+- **PWA hors-ligne** (`vite-plugin-pwa`, configurée dans `vite.config.ts`) : manifest + icônes
+  (`public/pwa-*.png`, maskable, apple-touch-icon, générées depuis `favicon.svg`), service worker
+  Workbox qui **précache tout le build** et sert `index.html` aux routes du `BrowserRouter`
+  (`navigateFallback`). Mise à jour silencieuse (`autoUpdate`). **Pas de service worker en dev** :
+  tester hors-ligne avec `npm run build && npm run preview`.
+- **Code-splitting** : les 4 pages sont chargées en `React.lazy` (un chunk par page, `<Suspense>`
+  dans `App.tsx`). Bundle initial ≈ 370 kB (≈ 120 kB gzip) au lieu d'un chunk unique de 526 kB.
 - **Déploiement** : `vercel.json` réécrit toute URL vers `index.html` pour que les deep links du
   `BrowserRouter` (ex. `/projection/evenements`) survivent à un refresh. CI GitHub (`.github/workflows/ci.yml`) :
   lint + tests + build sur chaque push / PR.
@@ -28,7 +40,7 @@ npm test          # vitest run  (À LANCER APRÈS TOUTE MODIF DU MOTEUR/MODÈLE)
 npm run preview   # prévisualiser le build
 ```
 
-**Tests** (`src/lib/*.test.ts`, ~190 cas, temps figé) : moteur de projection + ses
+**Tests** (`src/lib/*.test.ts`, 188 cas, temps figé) : moteur de projection + ses
 **invariants** (patrimoine début + enrichissement = début suivant ; sous-lignes qui somment
 aux agrégats ; neutralité des transferts : flows du surplus/retrait, transferts, achats/ventes ;
 plafonds ; 6 événements ; jalons/dates relatives ; inflation/euros constants ; 1re année
@@ -44,7 +56,7 @@ versements ⇔ `DEPOSIT_ELIGIBLE` »).
 ```
 src/
 ├── main.tsx            # entrée React ; importe styles/*.css DANS L'ORDRE (= cascade, ne pas réordonner)
-├── App.tsx             # StoreProvider > MotionConfig > BrowserRouter > ErrorBoundary > Shell ; titre par route
+├── App.tsx             # StoreProvider > MotionConfig > LazyMotion > BrowserRouter > ErrorBoundary > Shell ; pages en React.lazy ; titre par route
 ├── routes.tsx          # table de routes + slugs des sous-vues Projection
 ├── lib/                # modèle & logique PURE (testée)
 │   ├── types.ts        # modèle = source de vérité (AppState, Asset, Plan, SimState…)
@@ -257,7 +269,7 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
 
 - Thème **« maison de patrimoine »** sombre (thème unique) : encre vert-forêt, accents **laiton**,
   texte ivoire.
-- **Polices** (chargées dans `index.html`) : **Fraunces** (titres serif éditoriaux), **Hanken
+- **Polices** (auto-hébergées via `@fontsource`, importées dans `main.tsx`) : **Fraunces** (titres serif éditoriaux), **Hanken
   Grotesk** (UI/texte), **Spline Sans Mono** (tous les chiffres, tabulaires).
 - **Tokens** (`styles/tokens.css`) : `--brass` (laiton), `--sage` (vert végétal), `--gain`/`--drain`
   (performance/flux), `--ink*` (échelle ivoire), `--cat-1..5` (palette catégorielle validée),
@@ -337,6 +349,12 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   `:focus-visible` global ; `role="dialog"` + focus-trap. **`@media print`** recolore toute l'app
   (SVG compris) en surchargeant les **tokens** (sombre→clair) et masque nav/boutons. Export JSON
   tagué `charset=utf-8` (anti-mojibake).
+- **Animations : `m`, jamais `motion`.** L'app tourne sous `<LazyMotion strict>` (bundle
+  `domAnimation`, sans drag/layout) : un composant `motion.*` **lève une erreur au rendu**.
+  Importer `{ m } from "motion/react"` et ne pas masquer `m` par une variable locale (cf.
+  `MilestonesEditor`, boucle `ms`).
+- **`.claude/` est hors périmètre** (git, vitest `exclude`, eslint `globalIgnores`) : ce dossier
+  héberge les worktrees des sessions Claude — sans l'exclusion, chaque suite de tests tournait N fois.
 - **Migrations tolérantes** (`persistence.ts`, `loadState`/`migrateState`) : l'import passe par les
   **mêmes garanties**, tout se réécrit propre à la prochaine sauvegarde. Chaîne : **version** →
   **migrations** → **validation** (`sanitizeState`) → **estampillage** `schemaVersion`.

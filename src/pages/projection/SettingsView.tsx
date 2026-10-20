@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { Asset, ProjectionParams } from "../../lib/types";
 import CascadeEditor from "./CascadeEditor";
 import SurplusFlowEditor from "./SurplusFlowEditor";
@@ -19,7 +19,7 @@ export default function SettingsView({ p, setP, eligibleAssets }: {
   eligibleAssets: Asset[];
 }) {
   return (
-    <motion.div
+    <m.div
       className="settings-page"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -78,6 +78,6 @@ export default function SettingsView({ p, setP, eligibleAssets }: {
           onChange={(ids) => setP({ withdrawalTargets: ids.length ? ids : undefined })}
         />
       </div>
-    </motion.div>
+    </m.div>
   );
 }

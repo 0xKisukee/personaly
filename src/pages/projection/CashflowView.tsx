@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { YearPoint } from "../../lib/projection";
 import { money } from "../../lib/format";
 import SankeyChart from "../../components/SankeyChart";
@@ -20,7 +20,7 @@ export default function CashflowView({ points, realTerms }: { points: YearPoint[
 
   return (
     <>
-      <motion.div className="card cash-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+      <m.div className="card cash-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <div className="cash-head">
           <div>
             <div className="eyebrow">Cash-flow de l'année{realTerms ? " · € constants" : ""}</div>
@@ -46,7 +46,7 @@ export default function CashflowView({ points, realTerms }: { points: YearPoint[
           />
         </div>
         <SankeyChart point={pt} />
-      </motion.div>
+      </m.div>
       <p className="help" style={{ marginTop: 16 }}>
         D'où vient l'argent de l'année, et où il va. L'<b>épargne</b> est le poste d'équilibre : le surplus part
         « vers l'épargne », un déficit est « puisé dans l'épargne » (ou couvert par les <b>retraits d'actifs</b> si la

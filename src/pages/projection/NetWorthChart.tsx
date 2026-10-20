@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { Milestone } from "../../lib/types";
 import type { ProjectionEvent, YearPoint } from "../../lib/projection";
 import { money } from "../../lib/format";
@@ -196,15 +196,15 @@ export default function NetWorthChart({ points, events, milestones, mode, onEven
 
         {mode === "composition" ? (
           <>
-            <motion.path d={assetsBand} fill="var(--sage)" fillOpacity="0.24" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} />
-            <motion.path d={savingsBand} fill="var(--brass)" fillOpacity="0.32" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.08 }} />
-            <motion.path d={debtBand} fill="var(--drain)" fillOpacity="0.24" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.16 }} />
-            <motion.path d={line} fill="none" stroke="var(--brass-bright)" strokeWidth="2" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut" }} />
+            <m.path d={assetsBand} fill="var(--sage)" fillOpacity="0.24" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} />
+            <m.path d={savingsBand} fill="var(--brass)" fillOpacity="0.32" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.08 }} />
+            <m.path d={debtBand} fill="var(--drain)" fillOpacity="0.24" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.16 }} />
+            <m.path d={line} fill="none" stroke="var(--brass-bright)" strokeWidth="2" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut" }} />
           </>
         ) : (
           <>
-            <motion.path d={area} fill={`url(#${gradId})`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} />
-            <motion.path d={line} fill="none" stroke="var(--brass-bright)" strokeWidth="2.5" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut" }} />
+            <m.path d={area} fill={`url(#${gradId})`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} />
+            <m.path d={line} fill="none" stroke="var(--brass-bright)" strokeWidth="2.5" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: "easeOut" }} />
           </>
         )}
 

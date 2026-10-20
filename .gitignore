@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# outillage local Claude (launch.json, worktrees de sessions)
+.claude/

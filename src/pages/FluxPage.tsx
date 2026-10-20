@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useStore } from "../lib/useStore";
 import type {
   Asset,
@@ -249,7 +249,7 @@ export default function FluxPage() {
         }
       />
 
-      <motion.div
+      <m.div
         className="wealth-hero"
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -270,10 +270,10 @@ export default function FluxPage() {
           <div className="v neg">{outflow > 0 ? "−" + money(disp(outflow)) : money(0)}</div>
           <div className="sub">Dépenses, impôts + intérêts d'emprunt</div>
         </div>
-      </motion.div>
+      </m.div>
 
       {/* décomposition de l'enrichissement : réalisé + latent (sans répéter le total) */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.08 }}
@@ -296,7 +296,7 @@ export default function FluxPage() {
             <span className={"mono liq-v " + (latent >= 0 ? "pos" : "neg")}>{signedMoney(disp(latent))} {per}</span>
           </div>
         </div>
-      </motion.div>
+      </m.div>
 
       {/* onglets : filtrent l'affichage entrants / sortants */}
       <div className="fam-tabs">
@@ -371,7 +371,7 @@ export default function FluxPage() {
               const b = flowBounds(it, state.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <m.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className="row-ic txt-gain"><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
@@ -382,7 +382,7 @@ export default function FluxPage() {
                     <button className="icon-btn" onClick={() => setIncomeDraft({ ...it })} aria-label="Modifier"><IconEdit size={16} /></button>
                     <button className="icon-btn danger" onClick={() => delIncome(it.id)} aria-label="Supprimer"><IconTrash size={16} /></button>
                   </div>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>
@@ -447,7 +447,7 @@ export default function FluxPage() {
               const b = flowBounds(it, state.milestones);
               const active = isActiveYear(b.start, b.end, CURRENT_YEAR);
               return (
-                <motion.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <m.div className="row" key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: active ? 1 : 0.5, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <div className={"row-ic " + (it.category === "impot" ? "txt-brass" : "txt-drain")}><Meta.icon size={20} /></div>
                   <div className="row-main">
                     <div className="row-title">{it.label || Meta.label}</div>
@@ -458,7 +458,7 @@ export default function FluxPage() {
                     <button className="icon-btn" onClick={() => setExpenseDraft({ ...it })} aria-label="Modifier"><IconEdit size={16} /></button>
                     <button className="icon-btn danger" onClick={() => delExpense(it.id)} aria-label="Supprimer"><IconTrash size={16} /></button>
                   </div>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>

@@ -4,9 +4,12 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/fraunces/opsz.css'         // Fraunces : axes opsz + wght
 import '@fontsource-variable/fraunces/opsz-italic.css'  // … et son italique
 import '@fontsource-variable/hanken-grotesk'            // Hanken Grotesk : wght 100..900
-import '@fontsource/spline-sans-mono/400.css'
-import '@fontsource/spline-sans-mono/500.css'
-import '@fontsource/spline-sans-mono/600.css'
+import '@fontsource/spline-sans-mono/latin-400.css'      // Spline Sans Mono : latin + latin-ext
+import '@fontsource/spline-sans-mono/latin-ext-400.css'  // (œ, Œ…) — les autres alphabets sont inutiles ici
+import '@fontsource/spline-sans-mono/latin-500.css'
+import '@fontsource/spline-sans-mono/latin-ext-500.css'
+import '@fontsource/spline-sans-mono/latin-600.css'
+import '@fontsource/spline-sans-mono/latin-ext-600.css'
 // Design system éclaté — ordre = cascade (ne pas réordonner) :
 import './styles/tokens.css'      // variables (couleurs, type, espace, rayons, ombres)
 import './styles/base.css'        // reset, body, scrollbars, typographie

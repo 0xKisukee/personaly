@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'dev-dist', '.claude']), // .claude = worktrees des sessions, pas du code à lint
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

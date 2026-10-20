@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useStore } from "../../lib/useStore";
 import type { Asset, ProjectionParams, SimState } from "../../lib/types";
 import type { YearPoint } from "../../lib/projection";
@@ -51,7 +51,7 @@ export default function MonteCarloView({ projState, params, detPoints, eligibleA
         </div>
       )}
 
-      <motion.div className="mc-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+      <m.div className="mc-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <div className="mc-gauge">
           <svg width="112" height="112" viewBox="0 0 104 104">
             <circle cx="52" cy="52" r={R} fill="none" stroke="var(--line-strong)" strokeWidth="8" />
@@ -78,7 +78,7 @@ export default function MonteCarloView({ projState, params, detPoints, eligibleA
             <span className="tag">en {end.year}</span>
           </div>
         </div>
-      </motion.div>
+      </m.div>
 
       {(params.withdrawalTargets ?? []).length === 0 && eligibleAssets.length > 0 && (
         <p className="help" style={{ marginBottom: 16 }}>
@@ -87,7 +87,7 @@ export default function MonteCarloView({ projState, params, detPoints, eligibleA
         </p>
       )}
 
-      <motion.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.06 }}>
+      <m.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.06 }}>
         <div className="chart-head">
           <div className="chart-legend">
             <span><i style={{ background: "var(--brass)", opacity: 0.25 }} /> P10–P90</span>
@@ -97,7 +97,7 @@ export default function MonteCarloView({ projState, params, detPoints, eligibleA
           </div>
         </div>
         <FanChart bands={mc.bands} det={detPoints} />
-      </motion.div>
+      </m.div>
     </>
   );
 }

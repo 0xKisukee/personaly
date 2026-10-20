@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { Milestone, ProjectionParams } from "../../lib/types";
 import type { ProjectionEvent, YearPoint } from "../../lib/projection";
 import { money, signedMoney, percent } from "../../lib/format";
@@ -47,7 +47,7 @@ export default function ProjectionView({
   return (
     <>
       {/* --------- hero --------- */}
-      <motion.div className="wealth-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
+      <m.div className="wealth-hero" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
         <div className="wealth-cell lead">
           <div className="eyebrow">Patrimoine net en {end.year}{p.realTerms ? " · € constants" : ""}</div>
           <div className={"v " + (end.netWorth < 0 ? "neg" : "")}>{money(end.netWorth)}</div>
@@ -66,7 +66,7 @@ export default function ProjectionView({
             {cagr !== null ? ` · ${percent(cagr)}/an` : ""}
           </div>
         </div>
-      </motion.div>
+      </m.div>
 
       {/* --------- indépendance financière : revenus passifs LIQUIDES couvrant les dépenses --------- */}
       {fiPoint && (
@@ -86,7 +86,7 @@ export default function ProjectionView({
         </div>
       )}
 
-      <motion.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
+      <m.div className="card" style={{ padding: "18px 20px 12px" }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }}>
         <div className="chart-head">
           <Segment aria-label="Mode du graphe" value={chartMode} onChange={setChartMode} options={chartModes} />
 
@@ -132,7 +132,7 @@ export default function ProjectionView({
             onEventClick={onEditEvent}
           />
         )}
-      </motion.div>
+      </m.div>
 
       {/* --------- table --------- */}
       <section className="section" style={{ marginTop: 32 }}>
