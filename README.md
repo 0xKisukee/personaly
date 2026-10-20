@@ -24,7 +24,7 @@ npm test          # vitest run  (À LANCER APRÈS TOUTE MODIF DU MOTEUR/MODÈLE)
 npm run preview   # prévisualiser le build
 ```
 
-**Tests** (`src/lib/*.test.ts`, ~165 cas, temps figé) : moteur de projection + ses
+**Tests** (`src/lib/*.test.ts`, 171 cas, temps figé) : moteur de projection + ses
 **invariants** (patrimoine début + enrichissement = début suivant ; sous-lignes qui somment
 aux agrégats ; neutralité des transferts : flows du surplus/retrait, transferts, achats/ventes ;
 plafonds ; 6 événements ; jalons/dates relatives ; inflation/euros constants ; 1re année
@@ -112,7 +112,9 @@ SimState = simInput(state, plan)             // entrée du moteur : jalons = glo
 
 Un actif peut cumuler les deux (immo `rented` : valeur qui monte **et** loyer). Autres champs :
 `charges`, `valueFloor`, `volatility` (Monte Carlo **uniquement**), `depositCap`/`depositsMade`
-(versements du surplus). **Registre `lib/assets.ts`** = source unique par catégorie :
+(versements du surplus), `incomeLiquid`/`growthLiquid`/`liquidYear`/`liquidRef` (liquidité pour
+l'indépendance financière — voir « Concepts transverses »). **Registre `lib/assets.ts`** = source
+unique par catégorie :
 
 - Catégories : `immobilier` (+ flag `rented`), `epargne` (livrets **et** placements fusionnés),
   `liquidites`, `vehicule`, `autre`. Chaque type porte : libellé, icône, **accent d'identité
@@ -131,14 +133,17 @@ Un actif peut cumuler les deux (immo `rented` : valeur qui monte **et** loyer). 
 ### Passif — emprunt amortissable
 
 `emprunt_immo` | `credit` | `autre`. `outstanding` réduit le net ; mensualité **calculée**
-depuis capital + taux + durée (`finance.ts`) ou saisie (`autoPayment:false`). **Les crédits
-sont indépendants des biens** (pas de couplage modèle).
+depuis capital + taux + durée (`finance.ts`) ou saisie (`autoPayment:false`). `insurance` =
+assurance emprunteur mensuelle **en plus** de la mensualité (coût réel ; idem sur un événement
+`loan`). **Les crédits sont indépendants des biens** (pas de couplage modèle).
 
 ### Flux (`incomes`/`expenses`)
 
 Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense** manuelle
 (catégorie `impot`) — pas de moteur fiscal. Bornes `startYear`/`endYear` **ou** ancrage jalon
 `startRef`/`endRef` (prioritaire). `growth` propre au flux (sinon suit l'inflation si indexé).
+`nature` (`actif`/`passif`, défaut dérivé de la catégorie) et `liquid`/`liquidYear`/`liquidRef` ne
+servent qu'à l'**indépendance financière** (voir « Concepts transverses »).
 
 ### Jalons & événements
 
@@ -205,8 +210,10 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   retombe en épargne. (Migré depuis l'ancien `string[]` d'ids = flows `max`.) **Cascade de retrait**
   (`withdrawalTargets[]`, string[] ordonné) : en déficit, on puise dans ces actifs avant de peser sur
   l'épargne (décumulation retraite).
-- **Indépendance financière** = seuil **saisi** (`fiTarget`), pas déduit ; le moteur marque la 1re
-  année où le net l'atteint.
+- **Indépendance financière** = **calculée**, pas saisie : le moteur marque la 1re année où les
+  **revenus passifs liquides** (`liquidIncome`) couvrent les **besoins** (`needs` = dépenses + impôts
+  + charges d'actifs + mensualités d'emprunt, capital et assurance compris). Les deux montants sont
+  portés par chaque `YearPoint` (voir « Liquidité & nature des revenus »).
 - Hypothèses (persistées dans `plan.projection`) : `savingsYield`, `inflation`, indexation
   revenus/dépenses, `realTerms` (euros constants). **Monte Carlo** (`montecarlo.ts`) rejoue ~400×
   en bruitant la croissance selon `volatility` (seedé) → bandes P10–P90 + taux de succès.
@@ -220,7 +227,8 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
 - **Projection** — hero (net à l'horizon, évolution, CAGR), **graphe SVG** en 3 modes (net /
   composition actifs·épargne·dettes / **Plans** : une courbe par plan) avec jalons `◇`, marqueurs
   cliquables (`⚑` événement → édite, `✓` fin d'emprunt, `◆` FI) + légende ; **table annuelle** →
-  clic = modale **détail d'une année** (composition dépliable). **Volontairement épurée** (pas de
+  clic = modale **détail d'une année** (composition dépliable ; en euros constants, une ligne
+  **érosion monétaire** boucle le pont début → fin). **Volontairement épurée** (pas de
   réglages) : c'est l'écran d'atterrissage. Seul le sélecteur d'**horizon** vit dans l'en-tête.
 - **Événements** — deux éditeurs `MilestonesEditor` : **jalons communs** (globaux, tous les plans)
   et **jalons propres à ce plan** (supplément) + liste des 6 événements (saisie via `WhenPicker` :
@@ -229,8 +237,8 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   affectations ; l'épargne est le **poste d'équilibre** (surplus « vers l'épargne » / déficit « puisé »).
 - **Probabilité** — **Monte Carlo** : jauge de **taux de succès** + **éventail** de percentiles
   (P10–P90 / P25–P75) + médiane + trajectoire déterministe en pointillé.
-- **Réglages** (`SettingsView`, panneau `.assum`) — toutes les **hypothèses** (rendement, inflation,
-  patrimoine d'indépendance, indexation, euros constants) et les **règles d'affectation** de trésorerie
+- **Réglages** (`SettingsView`) — deux blocs : les **hypothèses** (panneau `.assum` : rendement,
+  inflation, indexation, euros constants) et les **règles de trésorerie** appliquées chaque mois
   (`SurplusFlowEditor` = flows du surplus, `CascadeEditor` = retraits en déficit). Isolé pour garder
   la Projection propre pour les nouveaux utilisateurs.
 
@@ -259,11 +267,26 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   ```
   La croissance capitalisée EST une variation de patrimoine (taguée `latent`, ≠ `encaissé`) — on
   distingue **réalisé/encaissé** de **latent**, pas liquide/illiquide (un Livret A est liquide mais
-  sa croissance n'est pas encaissée). Le **capital remboursé** n'est ni coût ni gain : il sort du
-  cash mais revient en net (la dette baisse d'autant) → exclu des flux sortants (seuls les
+  sa croissance n'est pas encaissée) — l'axe liquide/illiquide existe, mais sert **uniquement** à
+  l'indépendance financière (puce suivante). Le **capital remboursé** n'est ni coût ni gain :
+  il sort du cash mais revient en net (la dette baisse d'autant) → exclu des flux sortants (seuls les
   **intérêts** comptent ; split via `loanYearSplit()`). Sous-groupes Entrants : revenus du patrimoine
   (auto) · complémentaires (manuel) · plus-value latente (auto) ; Sortants : dépenses & impôts · charges
   d'actifs · intérêts d'emprunt · moins-value latente.
+- **Liquidité & nature des revenus** (axe distinct du précédent, sert **uniquement** à
+  l'indépendance financière) : un revenu ne compte au numérateur que s'il est **passif** ET
+  **liquide** ET **débloqué**.
+  - **Nature** (revenus manuels) : `nature` `actif`/`passif` (`incomeNature`, `isPassiveIncome`),
+    défaut dérivé de la catégorie (`salaire` = actif, le reste = passif), surchargeable par flux.
+    Un revenu **actif** ne compte JAMAIS — un salaire s'arrête si on arrête.
+  - **Liquidité** : revenu manuel passif → `liquid` (défaut **false**, l'utilisateur tague ce qui
+    compte) ; revenu **distribué** d'un actif → `incomeLiquid` (défaut **true** : c'est du cash) ;
+    **plus-value latente** d'un actif → `growthLiquid` (défaut **false** : un bien qui s'apprécie
+    ne verse rien ; à activer pour une assurance-vie ou un placement revendable).
+  - **Déblocage** : `liquidYear` / `liquidRef` (ancrage jalon **prioritaire**) — avant cette date
+    rien ne compte (assurance-vie, placement bloqué). Absente = liquide immédiatement.
+  - **UI** : chaque ligne de revenu de la page **Flux** porte une pastille `LiqPill` cliquable
+    (« Revenu du travail » / « Illiquide » / « Liquide dès … ») ouvrant la modale de liquidité.
 - **Langage couleur de PERFORMANCE** : `assetPerformance(a)` = `growthRate` + revenu distribué
   net / valeur. Échelle divergente drain→neutre→gain (`--perf-*`), rendue par `ui/PerformanceBadge`
   (+ `perfColor`). ⚠️ **`--gain`/`--drain` = performance RÉELLE par actif** ; les accents de
@@ -273,8 +296,9 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
 - **Accueil (Dashboard, `/`)** : ses modules de **base** (hero patrimoine, Répartition, Flux)
   ne dépendent PAS d'un plan (finances courantes uniquement) ; en dessous, une section **Plans**
   affiche **un aperçu par plan** — mini `NetWorthChart` (courbe + jalons) obtenu en projetant
-  chaque plan, clic → ouvre la Projection sur ce plan. **Horizon des aperçus = basé sur l'âge**
-  (jusqu'à 60/80/100/120 ans selon la tranche : <40→60, 40–60→80, 60–80→100, >80→120),
+  chaque plan (net de fin annoncé **à l'âge** atteint), clic → ouvre la Projection sur ce plan.
+  **Horizon des aperçus = basé sur l'âge** (jusqu'à 60/80/100/120 ans selon la tranche :
+  <40→60, 40–60→80, 60–80→100, >80→120),
   **indépendant** de `settings.horizon` (la timeframe de Projection) — défaut 40 ans si la date
   de naissance est absente.
 - **Réglages GLOBAUX** : `settings` porte les préférences partagées par tous les plans —
@@ -311,7 +335,8 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   depuis l'Épargne** (`EPARGNE_ID`) ; **`surplusTargets: string[]` → `SurplusFlow[]`** (ids → flows
   `max`) ; backfill `settings` (+ hissage de `horizon` depuis le plan actif) ; remaps de catégories
   (`livret_epargne`/`placement`→`epargne`, `compte_courant`→`liquidites`) ; purges héritées
-  (`valuationRate`, `surplusTargetId`→`surplusTargets`, `goalAmount`/`goalYear`→`fiTarget`) ; garde-fous
+  (`valuationRate`, `surplusTargetId`→`surplusTargets`, `goalAmount`/`goalYear`/`fiTarget` — ancien
+  seuil de patrimoine, remplacé par l'indépendance **calculée**) ; garde-fous
   (`activePlanId` invalide → 1er plan ; liste vide → plan par défaut). **Après tout changement de modèle :
   ajouter/adapter une migration + un test.**
 
@@ -322,10 +347,10 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
 Pas de moteur fiscal (impôt = dépense manuelle) · pas de sociétés (SAS/SCI retirées) ·
 croissance capitalisée ≠ revenu distribué (2 champs) · terminologie **encaissé vs latent** ·
 mensualité d'emprunt calculée · capital remboursé exclu des flux · saisie mensuelle **ou**
-annuelle · **FI = seuil saisi** (`fiTarget`), pas d'heuristique · objectif daté retiré ·
-événements **atomiques**, crédits indépendants des biens · **scénarios retirés** (remplacés par
-plans + `disabled`) · **cascade de retrait** (décumulation) miroir du surplus · Monte Carlo
-optionnel (la projection principale reste déterministe).
+annuelle · **FI = calculée** (revenus passifs liquides ≥ besoins), pas un seuil saisi ·
+objectif daté retiré · événements **atomiques**, crédits indépendants des biens ·
+**scénarios retirés** (remplacés par plans + `disabled`) · **cascade de retrait** (décumulation)
+miroir du surplus · Monte Carlo optionnel (la projection principale reste déterministe).
 
 ---
 
