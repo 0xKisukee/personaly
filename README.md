@@ -5,7 +5,8 @@ Objectif : modéliser finement l'évolution du patrimoine net dans le temps — 
 passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 
 > **100 % local** : aucun compte, aucun backend. Tout vit dans le `localStorage`
-> (`personaly:v1`). Aucune donnée ne quitte le navigateur. Export / import JSON.
+> (`personaly:v1`). Aucune donnée ne quitte le navigateur. Export / import JSON
+> (fichier **versionné** par `schemaVersion`, validé à l'import).
 
 ---
 
@@ -24,12 +25,13 @@ npm test          # vitest run  (À LANCER APRÈS TOUTE MODIF DU MOTEUR/MODÈLE)
 npm run preview   # prévisualiser le build
 ```
 
-**Tests** (`src/lib/*.test.ts`, ~165 cas, temps figé) : moteur de projection + ses
+**Tests** (`src/lib/*.test.ts`, ~190 cas, temps figé) : moteur de projection + ses
 **invariants** (patrimoine début + enrichissement = début suivant ; sous-lignes qui somment
 aux agrégats ; neutralité des transferts : flows du surplus/retrait, transferts, achats/ventes ;
 plafonds ; 6 événements ; jalons/dates relatives ; inflation/euros constants ; 1re année
-partielle), Monte Carlo (générateurs seedés + taux de succès), **migrations** localStorage
-(`store.test.ts`), **taxonomie d'actifs** (`assets.test.ts`, dont l'invariant « bloc UI
+partielle), Monte Carlo (générateurs seedés + taux de succès), **persistance**
+(`store.test.ts` : migrations localStorage, version de schéma, validation à l'import,
+écriture différée), **taxonomie d'actifs** (`assets.test.ts`, dont l'invariant « bloc UI
 versements ⇔ `DEPOSIT_ELIGIBLE` »).
 
 ---
@@ -39,11 +41,13 @@ versements ⇔ `DEPOSIT_ELIGIBLE` »).
 ```
 src/
 ├── main.tsx            # entrée React ; importe styles/*.css DANS L'ORDRE (= cascade, ne pas réordonner)
-├── App.tsx             # StoreProvider > MotionConfig > BrowserRouter > Shell ; titre par route
+├── App.tsx             # StoreProvider > MotionConfig > BrowserRouter > ErrorBoundary > Shell ; titre par route
 ├── routes.tsx          # table de routes + slugs des sous-vues Projection
 ├── lib/                # modèle & logique PURE (testée)
 │   ├── types.ts        # modèle = source de vérité (AppState, Asset, Plan, SimState…)
-│   ├── store.tsx       # contexte React + persistance + MIGRATIONS + export/import
+│   ├── store.tsx       # StoreProvider (composant seul, Fast Refresh) — écriture DIFFÉRÉE
+│   ├── useStore.ts     # contexte React + hook useStore
+│   ├── persistence.ts  # localStorage + MIGRATIONS + VALIDATION + export/import (pur, testé)
 │   ├── assets.ts       # REGISTRE des types d'actifs (méta, presets, familles, normalizeAsset)
 │   ├── selectors.ts    # calculs dérivés (patrimoine, flux, comptabilité, assetPerformance)
 │   ├── projection.ts   # MOTEUR mois par mois (déterministe + stochastique)
@@ -53,6 +57,7 @@ src/
 ├── ui/                 # PRIMITIVES du design system (enrobent les classes CSS)
 │   └── Button Input Field Select Segment Card Tag MoneyInput Donut PerformanceBadge(+perfColor)
 ├── components/         # composants transverses
+│   ├── ErrorBoundary.tsx  # FILET DE SÉCURITÉ : page de secours (exporter / recharger / réinitialiser), jamais d'écran blanc
 │   ├── Modal.tsx       # modale générique : PORTAIL vers <body>, focus-trap, verrou de scroll, Escape
 │   ├── Sidebar.tsx     # nav (00→03) + liste des PLANS + patrimoine net + accès Paramètres
 │   ├── SettingsModal.tsx  # Paramètres : nom, date de naissance
@@ -92,6 +97,7 @@ Le moteur ne connaît ni l'un ni l'autre : il reçoit un instantané composé `S
 
 ```ts
 AppState = {
+  schemaVersion: 2                           // VERSION DU SCHÉMA persisté (SCHEMA_VERSION, types.ts)
   profile:   { firstName, birthDate }
   settings:  { horizon, indexIncomes, indexExpenses, realTerms }  // GLOBAUX, partagés par tous les plans
   milestones: Milestone[]                    // JALONS GLOBAUX (voir « Jalons » plus bas)
@@ -167,7 +173,7 @@ Mensuel ou annuel. Revenus **nets avant impôt** ; l'impôt est une **dépense**
   Une destination-actif respecte son **plafond de versements** (`capLeftByAsset`, partagé avec la
   cascade du surplus) ; l'Épargne n'a pas de plafond (∞, un découvert est signalé). Montant borné
   par `min(demandé, solde source, capacité destination)`. Migration : les `deposit` persistés
-  deviennent des `transfer` depuis l'Épargne (`store.tsx`).
+  deviennent des `transfer` depuis l'Épargne (`persistence.ts`).
 - **Euros constants vs courants** (`nominal?` sur **tout** événement) : par **défaut** un montant est en
   **euros d'aujourd'hui** — le moteur l'**indexe sur l'inflation** jusqu'à l'année de l'événement
   (`evInfl`), donc un don de 150 k€ en 2050 = 150 k€ de pouvoir d'achat actuel (plus élevé nominalement,
@@ -304,16 +310,48 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   `:focus-visible` global ; `role="dialog"` + focus-trap. **`@media print`** recolore toute l'app
   (SVG compris) en surchargeant les **tokens** (sombre→clair) et masque nav/boutons. Export JSON
   tagué `charset=utf-8` (anti-mojibake).
-- **Migrations tolérantes** (`store.tsx`, `loadState`/`migrateState`) : l'import passe par les
-  **mêmes garanties**, tout se réécrit propre au prochain `setState`. Migrations actives :
-  état **plat → plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios
-  retirés** (événement `scenario` → `disabled:true`, clé purgée) ; **versement `deposit` → `transfer`
-  depuis l'Épargne** (`EPARGNE_ID`) ; **`surplusTargets: string[]` → `SurplusFlow[]`** (ids → flows
-  `max`) ; backfill `settings` (+ hissage de `horizon` depuis le plan actif) ; remaps de catégories
-  (`livret_epargne`/`placement`→`epargne`, `compte_courant`→`liquidites`) ; purges héritées
-  (`valuationRate`, `surplusTargetId`→`surplusTargets`, `goalAmount`/`goalYear`→`fiTarget`) ; garde-fous
-  (`activePlanId` invalide → 1er plan ; liste vide → plan par défaut). **Après tout changement de modèle :
-  ajouter/adapter une migration + un test.**
+- **Migrations tolérantes** (`persistence.ts`, `loadState`/`migrateState`) : l'import passe par les
+  **mêmes garanties**, tout se réécrit propre à la prochaine sauvegarde. Chaîne : **version** →
+  **migrations** → **validation** (`sanitizeState`) → **estampillage** `schemaVersion`.
+  - **Version de schéma** (`SCHEMA_VERSION = 2`, `types.ts`) : un état **sans** `schemaVersion`
+    est un **v1** → chemin tolérant historique puis estampillé. Toute écriture (localStorage,
+    export) porte la version **en tête**. Un fichier d'une version **supérieure** (app plus
+    récente) est **refusé** à l'import avec un message explicite — jamais tronqué en silence ;
+    au chargement, il fait repartir à vide **sans perdre le blob** (copié sous
+    `personaly:v1:rescue`, comme un JSON corrompu). N'incrémenter `SCHEMA_VERSION` **que** pour
+    un format qu'une build antérieure ne saurait pas relire.
+  - **Migrations actives** (idempotentes, un v2 les retraverse sans effet) : état **plat →
+    plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios retirés**
+    (événement `scenario` → `disabled:true`, clé purgée) ; **versement `deposit` → `transfer`
+    depuis l'Épargne** (`EPARGNE_ID`) ; **`surplusTargets: string[]` → `SurplusFlow[]`** (ids →
+    flows `max`) ; backfill `settings` (+ hissage de `horizon` depuis le plan actif) ; remaps de
+    catégories (`livret_epargne`/`placement`→`epargne`, `compte_courant`→`liquidites`) ; purges
+    héritées (`valuationRate`, `surplusTargetId`→`surplusTargets`, `goalAmount`/`goalYear`→`fiTarget`).
+  - **Validation** (`sanitizeState`, sans dépendance) : force les types champ par champ —
+    nombres (`value`, `growthRate`, `outstanding`, `amount`, `year`… : fini sinon **0**, ou clé
+    **retirée** si optionnelle ; une chaîne numérique est acceptée), tableaux (non-tableau →
+    `[]`), ids (string non vide sinon **régénéré** — on garde la donnée), énumérations
+    (catégorie/mode inconnus → valeur sûre, `autre`/`none`, pour ne jamais faire planter un
+    registre). **Purge** l'inexploitable : entrée non-objet, événement sans `kind` connu ou sans
+    sa cible (`buy` sans `asset`, `sell`/`repay`/`transfer` sans id), jalon sans année. Garde-fous :
+    `activePlanId` invalide → 1er plan ; liste de plans vide → plan par défaut. Les clés
+    **inconnues** sont conservées (tolérance). Idempotent : un état valide ressort identique.
+  - **Erreurs** : `migrateState` **lève** (contenu pas un objet, version future) ; la sidebar
+    valide **à blanc** avant la confirmation et affiche le motif (`window.alert`) sans toucher
+    aux données ; `loadState` attrape tout et repart à vide (+ copie de secours).
+  - **Après tout changement de modèle : ajouter/adapter une migration + une règle de
+    `sanitizeState` + un test** (et bumper `SCHEMA_VERSION` seulement si incompatible).
+- **Sauvegarde différée** (`StoreProvider`, `store.tsx`) : l'état complet n'est **pas** sérialisé à chaque
+  frappe — l'écriture localStorage est **regroupée ~300 ms** après le dernier changement
+  (`createDebouncedWriter`, testé) et **garantie immédiate** sur `beforeunload` / `pagehide` /
+  onglet masqué. `reset` annule l'écriture en attente et vide le stockage **tout de suite** (sinon
+  un état abandonné se réécrirait au `pagehide` d'un rechargement). L'indicateur « Enregistré » de
+  la sidebar écoute le **changement** d'état, pas l'écriture — écart imperceptible, assumé.
+- **Filet de sécurité** (`components/ErrorBoundary`, classe, **dans** le `StoreProvider`) :
+  une erreur de rendu affiche une page de secours dans le style de l'app (message d'erreur,
+  **Exporter mes données** via `downloadStateJson` — partagé avec la sidebar —, **Recharger**,
+  **Réinitialiser** après confirmation) au lieu d'un écran blanc qui se reproduirait à chaque
+  rechargement. Les erreurs des gestionnaires d'événements ne sont pas couvertes (limite React).
 
 ---
 
@@ -345,5 +383,5 @@ optionnel (la projection principale reste déterministe).
 2. `lib/projection.ts` — le moteur mois par mois (le cœur, le plus testé).
 3. `lib/assets.ts` — le registre des types d'actifs (taxonomie, presets, familles).
 4. `lib/selectors.ts` — calculs dérivés (patrimoine, flux, `assetPerformance`).
-5. `lib/store.tsx` — persistance + migrations (après tout changement de modèle).
+5. `lib/persistence.ts` — persistance + migrations + validation (après tout changement de modèle).
 6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 5 vues).
