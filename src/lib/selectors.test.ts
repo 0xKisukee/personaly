@@ -109,6 +109,37 @@ describe("flux manuels bornés par années", () => {
   });
 });
 
+describe("flux ancrés sur un jalon (startRef/endRef prioritaires sur les années en dur)", () => {
+  // Même règle que le moteur (flowBounds) : si un jalon a bougé, la page Flux et le
+  // Dashboard doivent suivre — l'année en dur n'est qu'un secours si le jalon disparaît.
+  const s = state({
+    milestones: [
+      { id: "m-past", label: "Début", year: Y - 1 },
+      { id: "m-future", label: "Retraite", year: Y + 20 },
+    ],
+    incomes: [
+      // année en dur dans le futur, mais ancré sur un jalon déjà passé → ACTIF
+      { id: "i1", label: "ancré passé", category: "rente", amount: 1_000, period: "monthly", startYear: Y + 10, startRef: { milestoneId: "m-past" } },
+      // année en dur active, mais ancré sur un jalon futur → INACTIF
+      { id: "i2", label: "ancré futur", category: "salaire", amount: 5_000, period: "monthly", startYear: Y - 5, startRef: { milestoneId: "m-future" } },
+      // jalon supprimé → on retombe sur l'année en dur (future) → INACTIF
+      { id: "i3", label: "orphelin", category: "autre", amount: 7_000, period: "monthly", startYear: Y + 3, startRef: { milestoneId: "zombie" } },
+    ],
+    expenses: [
+      // fin en dur passée, mais ancrée sur un jalon futur (+1) → encore ACTIVE
+      { id: "e1", label: "loyer", category: "logement", amount: 500, period: "monthly", endYear: Y - 3, endRef: { milestoneId: "m-future", offset: 1 } },
+      // fin en dur future, mais ancrée sur le jalon passé → FINIE
+      { id: "e2", label: "finie", category: "autre", amount: 900, period: "yearly", endYear: Y + 10, endRef: { milestoneId: "m-past" } },
+    ],
+  });
+  it("revenu avec startYear futur mais startRef sur un jalon passé est compté", () => {
+    expect(extraIncomeYearly(s)).toBe(12_000);
+  });
+  it("dépense avec endYear passé mais endRef sur un jalon futur est comptée", () => {
+    expect(expensesYearly(s)).toBe(6_000);
+  });
+});
+
 describe("emprunts", () => {
   const pmt = monthlyPayment(100_000, 3, 240);
   const loan: Liability = {

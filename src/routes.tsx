@@ -10,7 +10,6 @@ export interface RouteDef {
   id: RouteId;
   path: string;
   label: string;
-  soon?: boolean;
 }
 
 /** Routes de premier niveau affichées dans la nav de la sidebar (index = n° « 00 »…). */

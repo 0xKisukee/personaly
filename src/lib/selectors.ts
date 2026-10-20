@@ -1,4 +1,5 @@
 import type { AppState, Asset } from "./types";
+import { flowBounds } from "./types";
 import { toYearly, isActiveYear } from "./format";
 import { loanYearSplit } from "./finance";
 
@@ -71,12 +72,18 @@ export function patrimoineIncomeYearly(s: AppState): number {
   return s.assets.reduce((sum, a) => sum + assetYearlyIncome(a), 0);
 }
 
+/** Un flux est-il actif cette année ? Bornes résolues comme le moteur : ancrage jalon prioritaire, sinon années en dur. */
+function isActiveNow(
+  f: Parameters<typeof flowBounds>[0],
+  s: Pick<AppState, "milestones">
+): boolean {
+  const { start, end } = flowBounds(f, s.milestones);
+  return isActiveYear(start, end, CURRENT_YEAR);
+}
+
 /** Revenus complémentaires ACTIFS cette année — encaissés, liquides (annuel). */
 export function extraIncomeYearly(s: AppState): number {
-  return s.incomes.reduce(
-    (sum, i) => sum + (isActiveYear(i.startYear, i.endYear, CURRENT_YEAR) ? toYearly(i) : 0),
-    0
-  );
+  return s.incomes.reduce((sum, i) => sum + (isActiveNow(i, s) ? toYearly(i) : 0), 0);
 }
 
 /** Croissance capitalisée nette du patrimoine (annuel) : appréciations − dépréciations. */
@@ -131,10 +138,7 @@ export function loanPaymentsYearly(s: AppState): number {
 
 /** Dépenses & impôts ACTIFS cette année — liquides (annuel). */
 export function expensesYearly(s: AppState): number {
-  return s.expenses.reduce(
-    (sum, e) => sum + (isActiveYear(e.startYear, e.endYear, CURRENT_YEAR) ? toYearly(e) : 0),
-    0
-  );
+  return s.expenses.reduce((sum, e) => sum + (isActiveNow(e, s) ? toYearly(e) : 0), 0);
 }
 
 /** Charges récurrentes des actifs (taxe foncière, copro…) — sortant réel (annuel). */

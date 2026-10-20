@@ -1,4 +1,4 @@
-import type { Milestone, MilestoneRef, MoneyFlow, Period } from "./types";
+import type { Milestone, MilestoneRef, MoneyFlow } from "./types";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -42,10 +42,6 @@ export function toYearly(flow?: MoneyFlow): number {
 export function toMonthly(flow?: MoneyFlow): number {
   if (!flow) return 0;
   return flow.period === "yearly" ? flow.amount / 12 : flow.amount;
-}
-
-export function periodLabel(p: Period): string {
-  return p === "monthly" ? "/ mois" : "/ an";
 }
 
 /** Âge en années à partir d'une date ISO. */

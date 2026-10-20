@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void mem.delete(k),
 });
 
-import { loadState, migrateState, serializeState } from "./store";
+import { loadState, migrateState, serializeState } from "./persistence";
 import { EMPTY_STATE, EPARGNE_ID, canReceiveDeposits } from "./types";
 
 const KEY = "personaly:v1";

@@ -16,6 +16,9 @@ passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
 - **motion** pour les animations (enveloppé dans `<MotionConfig reducedMotion="user">`).
 - **Aucune** lib de graphes : tout est en **SVG maison**. Pas de lib UI (design system maison).
 - **Thème sombre uniquement** ; feuille `@media print` pour un export papier propre.
+- **Déploiement** : `vercel.json` réécrit toute URL vers `index.html` pour que les deep links du
+  `BrowserRouter` (ex. `/projection/evenements`) survivent à un refresh. CI GitHub (`.github/workflows/ci.yml`) :
+  lint + tests + build sur chaque push / PR.
 
 ```bash
 npm run dev       # dev
@@ -43,7 +46,9 @@ src/
 ├── routes.tsx          # table de routes + slugs des sous-vues Projection
 ├── lib/                # modèle & logique PURE (testée)
 │   ├── types.ts        # modèle = source de vérité (AppState, Asset, Plan, SimState…)
-│   ├── store.tsx       # contexte React + persistance + MIGRATIONS + export/import
+│   ├── store.tsx       # StoreProvider (composant seul, Fast Refresh)
+│   ├── useStore.ts     # contexte React + hook useStore
+│   ├── persistence.ts  # localStorage + MIGRATIONS + export/import (pur, testé)
 │   ├── assets.ts       # REGISTRE des types d'actifs (méta, presets, familles, normalizeAsset)
 │   ├── selectors.ts    # calculs dérivés (patrimoine, flux, comptabilité, assetPerformance)
 │   ├── projection.ts   # MOTEUR mois par mois (déterministe + stochastique)
@@ -51,7 +56,7 @@ src/
 │   ├── finance.ts      # amortissement (mensualité, split intérêts/capital)
 │   └── format.ts       # money(), percent(), périodes, âge, whenLabel(), uid()
 ├── ui/                 # PRIMITIVES du design system (enrobent les classes CSS)
-│   └── Button Input Field Select Segment Card Tag MoneyInput Donut PerformanceBadge(+perfColor)
+│   └── Input Field Select Segment Donut PerformanceBadge (+ perfColor.ts)
 ├── components/         # composants transverses
 │   ├── Modal.tsx       # modale générique : PORTAIL vers <body>, focus-trap, verrou de scroll, Escape
 │   ├── Sidebar.tsx     # nav (00→03) + liste des PLANS + patrimoine net + accès Paramètres
@@ -172,7 +177,7 @@ servent qu'à l'**indépendance financière** (voir « Concepts transverses »).
   Une destination-actif respecte son **plafond de versements** (`capLeftByAsset`, partagé avec la
   cascade du surplus) ; l'Épargne n'a pas de plafond (∞, un découvert est signalé). Montant borné
   par `min(demandé, solde source, capacité destination)`. Migration : les `deposit` persistés
-  deviennent des `transfer` depuis l'Épargne (`store.tsx`).
+  deviennent des `transfer` depuis l'Épargne (`persistence.ts`).
 - **Euros constants vs courants** (`nominal?` sur **tout** événement) : par **défaut** un montant est en
   **euros d'aujourd'hui** — le moteur l'**indexe sur l'inflation** jusqu'à l'année de l'événement
   (`evInfl`), donc un don de 150 k€ en 2050 = 150 k€ de pouvoir d'achat actuel (plus élevé nominalement,
@@ -328,7 +333,7 @@ avec une barre de plan (renommer / dupliquer / supprimer) et 5 vues portées par
   `:focus-visible` global ; `role="dialog"` + focus-trap. **`@media print`** recolore toute l'app
   (SVG compris) en surchargeant les **tokens** (sombre→clair) et masque nav/boutons. Export JSON
   tagué `charset=utf-8` (anti-mojibake).
-- **Migrations tolérantes** (`store.tsx`, `loadState`/`migrateState`) : l'import passe par les
+- **Migrations tolérantes** (`persistence.ts`, `loadState`/`migrateState`) : l'import passe par les
   **mêmes garanties**, tout se réécrit propre au prochain `setState`. Migrations actives :
   état **plat → plans** (ancien `AppState` sans `plans[]` → « Plan principal ») ; **scénarios
   retirés** (événement `scenario` → `disabled:true`, clé purgée) ; **versement `deposit` → `transfer`
@@ -370,5 +375,5 @@ miroir du surplus · Monte Carlo optionnel (la projection principale reste déte
 2. `lib/projection.ts` — le moteur mois par mois (le cœur, le plus testé).
 3. `lib/assets.ts` — le registre des types d'actifs (taxonomie, presets, familles).
 4. `lib/selectors.ts` — calculs dérivés (patrimoine, flux, `assetPerformance`).
-5. `lib/store.tsx` — persistance + migrations (après tout changement de modèle).
+5. `lib/persistence.ts` — persistance + migrations (après tout changement de modèle).
 6. `pages/ProjectionPage.tsx` — la page la plus riche (orchestre moteur + 5 vues).
