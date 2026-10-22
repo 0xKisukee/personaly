@@ -29,7 +29,7 @@ passifs, revenus/dépenses, hypothèses — et le simuler sur plusieurs années.
   tester hors-ligne avec `npm run build && npm run preview`.
 - **Code-splitting** : les 4 pages sont chargées en `React.lazy` (un chunk par page, `<Suspense>`
   dans `App.tsx`). Bundle initial ≈ 370 kB (≈ 120 kB gzip) au lieu d'un chunk unique de 526 kB.
-- **Déploiement** : `vercel.json` réécrit toute URL vers `index.html` pour que les deep links du
+- **Déploiement** : `vercel.json` force `npm ci` (npm 10 plante sur `npm install` ici) et réécrit toute URL vers `index.html` pour que les deep links du
   `BrowserRouter` (ex. `/projection/evenements`) survivent à un refresh. CI GitHub (`.github/workflows/ci.yml`) :
   lint + tests + build sur chaque push / PR.
 
